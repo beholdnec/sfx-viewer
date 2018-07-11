@@ -3,13 +3,20 @@
   "version": "1.0.0",
   "description": "Displays objects from Star Fox for the SNES",
   "scripts": {
-    "build": "tsc",
+    "build": "webpack --mode=development",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "author": "n.e.c.",
   "license": "ISC",
   "devDependencies": {
+    "@types/gl-matrix": "^2.4.0",
     "@types/webgl2": "0.0.4",
-    "typescript": "^2.9.2"
+    "ts-loader": "^4.4.2",
+    "typescript": "^2.9.2",
+    "webpack": "^4.16.0",
+    "webpack-cli": "^3.0.8"
+  },
+  "dependencies": {
+    "gl-matrix": "^2.6.1"
   }
 }

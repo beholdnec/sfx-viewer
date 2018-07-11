@@ -1,7 +1,16 @@
+import { mat4 } from 'gl-matrix'
+
 console.log('Hello, world!')
 
 const canvas = <HTMLCanvasElement>document.getElementById('main-canvas')
 const gl = <WebGL2RenderingContext>canvas.getContext('webgl2')
+
+function mat4_mul(a: mat4, b: mat4)
+{
+    const result = mat4.create()
+    mat4.mul(result, a, b)
+    return result
+}
 
 function compileShader(shaderType: number, source: string): WebGLShader
 {
@@ -52,6 +61,7 @@ void main()
 {
     vWorldPosition = (uModelMatrix * vec4(aPosition, 1.)).xyz;
     gl_Position = uViewProjMatrix * vec4(vWorldPosition, 1.);
+    gl_PointSize = 4.;
 }
 `
 
@@ -168,6 +178,18 @@ class SFXObject
     render()
     {
         gl.useProgram(this.shader.program)
+
+        const modelMatrix = mat4.create()
+        gl.uniformMatrix4fv(this.shader.uModelMatrix, false, modelMatrix)
+
+        const viewMatrix = mat4.create()
+        mat4.translate(viewMatrix, viewMatrix, [0., 0., -255])
+
+        const projMatrix = mat4.create()
+        mat4.perspective(projMatrix, 45, canvas.width / canvas.height, 0.01, 10000.0)
+        
+        const viewProjMatrix = mat4_mul(projMatrix, viewMatrix)
+        gl.uniformMatrix4fv(this.shader.uViewProjMatrix, false, viewProjMatrix)
 
         gl.bindBuffer(gl.ARRAY_BUFFER, this.vertexBuffer)
         gl.enableVertexAttribArray(this.shader.aPosition)

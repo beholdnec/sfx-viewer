@@ -1,0 +1,14 @@
+{
+  "name": "sfx-viewer",
+  "version": "1.0.0",
+  "description": "Displays objects from Star Fox for the SNES",
+  "scripts": {
+    "build": "tsc",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "n.e.c.",
+  "license": "ISC",
+  "devDependencies": {
+    "typescript": "^2.9.2"
+  }
+}

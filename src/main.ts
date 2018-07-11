@@ -102,10 +102,18 @@ enum VertexCmd
     XFlipped = 0x38,
 }
 
+enum FaceCmd
+{
+    TriangleList = 0x30,
+    BSPTree = 0x3C,
+}
+
 class SFXObject
 {
     vertexBuffer: WebGLBuffer
     numVertices: number = 0
+    indexBuffer: WebGLBuffer
+    numIndices: number = 0
     shader: SFXShader
 
     constructor(rom: ArrayBuffer, verticesOffset: number, facesOffset: number)
@@ -173,6 +181,59 @@ class SFXObject
         gl.bindBuffer(gl.ARRAY_BUFFER, this.vertexBuffer)
         gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(vertices), gl.STATIC_DRAW)
         this.numVertices = vertices.length / 3
+
+        // Load faces
+        const triangleList = []
+        cursor = facesOffset
+        done = false
+        while (!done)
+        {
+            const type = dv.getUint8(cursor)
+            cursor++
+
+            switch (type)
+            {
+            case FaceCmd.TriangleList:
+            {
+                const num = dv.getUint8(cursor)
+                cursor++
+                for (let i = 0; i < num; i++)
+                {
+                    const tri0 = dv.getUint8(cursor)
+                    cursor++
+                    const tri1 = dv.getUint8(cursor)
+                    cursor++
+                    const tri2 = dv.getUint8(cursor)
+                    cursor++
+
+                    triangleList.push(tri0, tri1, tri2)
+                }
+                break
+            }
+            case FaceCmd.BSPTree:
+            {
+                const nodeType = dv.getUint8(cursor)
+                cursor++
+
+                switch (nodeType)
+                {
+                default:
+                    done = true;
+                    console.warn(`BSP tree ignored`) // TODO: read BSP tree
+                    break
+                    //throw new Error(`Unknown BSP node type 0x${nodeType.toString(16)}`)
+                }
+                break
+            }
+            default:
+                throw new Error(`Unknown face entry type 0x${type.toString(16)}`)
+            }
+        }
+
+        this.indexBuffer = gl.createBuffer()
+        gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, this.indexBuffer)
+        gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint8Array(triangleList), gl.STATIC_DRAW)
+        this.numIndices = triangleList.length
     }
 
     render()
@@ -195,7 +256,9 @@ class SFXObject
         gl.enableVertexAttribArray(this.shader.aPosition)
         gl.vertexAttribPointer(this.shader.aPosition, 3, gl.FLOAT, false, 0, 0)
 
-        gl.drawArrays(gl.POINTS, 0, this.numVertices)
+        //gl.drawArrays(gl.POINTS, 0, this.numVertices)
+        gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, this.indexBuffer)
+        gl.drawElements(gl.TRIANGLES, this.numIndices, gl.UNSIGNED_BYTE, 0)
     }
 }
 

@@ -47,15 +47,15 @@ function compileProgram(vertexShaderSource: string, fragmentShaderSource: string
 }
 
 const SFX_VERTEX_SHADER_SOURCE =
-`
+`#version 300 es
 precision mediump float;
 
-attribute vec3 aPosition;
+in vec3 aPosition;
 
 uniform mat4 uModelMatrix;
 uniform mat4 uViewProjMatrix;
 
-varying vec3 vWorldPosition;
+out vec3 vWorldPosition;
 
 void main()
 {
@@ -66,14 +66,20 @@ void main()
 `
 
 const SFX_FRAGMENT_SHADER_SOURCE =
-`
+`#version 300 es
 precision mediump float;
 
-varying vec3 vWorldPosition;
+in vec3 vWorldPosition;
+
+out vec4 oColor;
 
 void main()
 {
-    gl_FragColor = vec4(0., 1., 0., 1.);
+    vec3 incident = vec3(0., 0., -1.);
+    vec3 L = normalize(-incident);
+    vec3 N = normalize(cross(dFdx(vWorldPosition), dFdy(vWorldPosition)));
+    float NdotL = dot(N, L);
+    oColor = vec4(vec3(NdotL), 1.);
 }
 `
 

@@ -9,6 +9,7 @@
   "author": "n.e.c.",
   "license": "ISC",
   "devDependencies": {
+    "@types/webgl2": "0.0.4",
     "typescript": "^2.9.2"
   }
 }

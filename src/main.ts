@@ -373,7 +373,6 @@ class SFXObject
 
         const vertexBuffer = gl.createBuffer()
 
-        // TODO: render object
         for (let i = 0; i < this.faces.length; i++)
         {
             const face = this.faces[i]
@@ -391,7 +390,13 @@ class SFXObject
             gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(vertexData), gl.STREAM_DRAW)
             gl.enableVertexAttribArray(this.shader.aPosition)
             gl.vertexAttribPointer(this.shader.aPosition, 3, gl.FLOAT, false, 0, 0)
+
+            // Render quads properly
+            //const indexBuffer = gl.createBuffer()
+            //gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, indexBuffer)
+            //gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint8Array([0, 1, 2, 0, 1, 3]), gl.STREAM_DRAW)
             gl.drawArrays(gl.TRIANGLE_STRIP, 0, face.numVerts)
+            //gl.drawElements(gl.TRIANGLES, face.numVerts, gl.UNSIGNED_BYTE, 0)
         }
     }
 }

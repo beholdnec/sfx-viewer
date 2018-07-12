@@ -134,6 +134,8 @@ enum VertexCmd
 {
     Plain = 0x04,
     End = 0x0C,
+    AnimatedList = 0x1C,
+    Jump = 0x20,
     XFlipped = 0x38,
 }
 
@@ -147,6 +149,7 @@ enum FaceCmd
 enum NodeType
 {
     Branch = 0x28,
+    Null = 0x40,
     Leaf = 0x44,
 }
 
@@ -166,6 +169,9 @@ class SFXObject
     vertices: number[] = []
     faces: Face[] = []
     shader: SFXShader
+
+    vertexBuffer = gl.createBuffer()
+    indexBuffer = gl.createBuffer()
 
     constructor(rom: ArrayBuffer, verticesOffset: number, facesOffset: number)
     {
@@ -207,6 +213,26 @@ class SFXObject
                 console.log(`End of verts`)
                 done = true
                 break
+            case VertexCmd.AnimatedList:
+            {
+                const numFrames = dv.getUint8(cursor)
+                cursor++
+
+                console.log(`Animated model with ${numFrames} frames`)
+
+                // Jump to a frame
+                cursor += (numFrames - 1) * 2 /* Jump to final frame */
+                const frameOffset = dv.getUint16(cursor, true)
+                cursor += frameOffset + 1
+
+                break
+            }
+            case VertexCmd.Jump:
+            {
+                const offset = dv.getUint16(cursor, true) // FIXME: signed?
+                cursor += offset + 1
+                break
+            }
             case VertexCmd.XFlipped:
             {
                 const num = dv.getUint8(cursor)
@@ -324,6 +350,9 @@ class SFXObject
                 const frontNode = parseBSPNode()
                 break
             }
+            case NodeType.Null:
+                console.log(`Null node`)
+                break
             case NodeType.Leaf:
             {
                 const facegroupOffset = dv.getUint16(cursor, true)
@@ -371,8 +400,6 @@ class SFXObject
         gl.uniformMatrix4fv(this.shader.uModelMatrix, false, modelMatrix)
         gl.uniformMatrix4fv(this.shader.uViewProjMatrix, false, viewProjMatrix)
 
-        const vertexBuffer = gl.createBuffer()
-
         for (let i = 0; i < this.faces.length; i++)
         {
             const face = this.faces[i]
@@ -386,17 +413,16 @@ class SFXObject
                 vertexData.push(this.vertices[v * 3 + 2])
             }
 
-            gl.bindBuffer(gl.ARRAY_BUFFER, vertexBuffer)
+            gl.bindBuffer(gl.ARRAY_BUFFER, this.vertexBuffer)
             gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(vertexData), gl.STREAM_DRAW)
             gl.enableVertexAttribArray(this.shader.aPosition)
             gl.vertexAttribPointer(this.shader.aPosition, 3, gl.FLOAT, false, 0, 0)
 
             // Render quads properly
-            //const indexBuffer = gl.createBuffer()
-            //gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, indexBuffer)
-            //gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint8Array([0, 1, 2, 0, 1, 3]), gl.STREAM_DRAW)
-            gl.drawArrays(gl.TRIANGLE_STRIP, 0, face.numVerts)
-            //gl.drawElements(gl.TRIANGLES, face.numVerts, gl.UNSIGNED_BYTE, 0)
+            gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, this.indexBuffer)
+            gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint8Array([0, 1, 2, 0, 2, 3]), gl.STREAM_DRAW)
+            //gl.drawArrays(gl.TRIANGLE_STRIP, 0, face.numVerts)
+            gl.drawElements(gl.TRIANGLES, face.numVerts == 4 ? 6 : 3, gl.UNSIGNED_BYTE, 0)
         }
     }
 }
@@ -416,7 +442,18 @@ class SFXViewer
     
         // Note: Many sources assume there is a 0x200-byte padding at the beginning of the ROM.
         // TODO: Detect and handle this padding.
-        this.sfxObject = new SFXObject(rom, 0x66001, 0x66042)
+
+        // Big high poly Arwing
+        //this.sfxObject = new SFXObject(rom, 0x66001, 0x66042)
+        // Andross face morph
+        this.sfxObject = new SFXObject(rom, 0x7E29E, 0x7E886)
+        // Andross face morph 2
+        //this.sfxObject = new SFXObject(rom, 0x7EB81, 0x7F05B)
+        // Andross evil face morph
+        //this.sfxObject = new SFXObject(rom, 0x8E1FE, 0x8EA22)
+        // Helicopter
+        //this.sfxObject = new SFXObject(rom, 0x7B193, 0x7B215)
+
 
         this.render(performance.now())
     }

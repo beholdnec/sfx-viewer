@@ -150,12 +150,21 @@ enum NodeType
     Leaf = 0x44,
 }
 
+class Face
+{
+    numVerts: number
+    faceId: number
+    color: number
+    nx: number
+    ny: number
+    nz: number
+    verts: number[]
+}
+
 class SFXObject
 {
-    vertexBuffer: WebGLBuffer
-    numVertices: number = 0
-    indexBuffer: WebGLBuffer
-    numIndices: number = 0
+    vertices: number[] = []
+    faces: Face[] = []
     shader: SFXShader
 
     constructor(rom: ArrayBuffer, verticesOffset: number, facesOffset: number)
@@ -165,7 +174,7 @@ class SFXObject
         const dv = new DataView(rom)
 
         // Load vertices
-        const vertices = []
+        this.vertices = []
         var cursor = verticesOffset
         var done = false
         while (!done)
@@ -188,7 +197,7 @@ class SFXObject
                     const z = dv.getInt8(cursor)
                     cursor++
 
-                    vertices.push(x, y, z)
+                    this.vertices.push(x, y, z)
                 }
                 break
             }
@@ -209,8 +218,8 @@ class SFXObject
                     const z = dv.getInt8(cursor)
                     cursor++
 
-                    vertices.push(x, y, z)
-                    vertices.push(-x, y, z)
+                    this.vertices.push(x, y, z)
+                    this.vertices.push(-x, y, z)
                 }
                 break
             }
@@ -219,134 +228,136 @@ class SFXObject
             }
         }
 
-        this.vertexBuffer = gl.createBuffer()
-        gl.bindBuffer(gl.ARRAY_BUFFER, this.vertexBuffer)
-        gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(vertices), gl.STATIC_DRAW)
-        this.numVertices = vertices.length / 3
-
-        // Load faces
-        const triangleList = []
-        cursor = facesOffset
-        done = false
-        while (!done)
+        const parseTriangleList = function ()
         {
-            const type = dv.getUint8(cursor)
+            const result = []
+
+            const num = dv.getUint8(cursor)
+            cursor++
+            for (let i = 0; i < num; i++)
+            {
+                const tri0 = dv.getUint8(cursor)
+                cursor++
+                const tri1 = dv.getUint8(cursor)
+                cursor++
+                const tri2 = dv.getUint8(cursor)
+                cursor++
+
+                result.push(tri0, tri1, tri2)
+            }
+
+            return result
+        }
+
+        const parseFaceGroup: () => Face[] = function ()
+        {
+            const result = []
+
+            var groupDone = false
+            while (!groupDone)
+            {
+                const face = new Face()
+
+                face.numVerts = dv.getUint8(cursor)
+                cursor++
+                if (face.numVerts >= 0xFE)
+                {
+                    console.warn(`End of facegroup marker 0x${face.numVerts.toString(16)} encountered`)
+                    groupDone = true
+                    break
+                }
+
+
+                face.faceId = dv.getUint8(cursor)
+                cursor++
+                face.color = dv.getUint8(cursor)
+                cursor++
+                face.nx = dv.getUint8(cursor)
+                cursor++
+                face.ny = dv.getUint8(cursor)
+                cursor++
+                face.nz = dv.getUint8(cursor)
+                cursor++
+
+                face.verts = []
+                for (let i = 0; i < face.numVerts; i++)
+                {
+                    face.verts.push(dv.getUint8(cursor))
+                    cursor++
+                }
+
+                console.log(`Face: num verts ${face.numVerts}; face id ${face.faceId}; color ${face.color}; n ${face.nx},${face.ny},${face.nz}; verts ${face.verts}`)
+
+                result.push(face)
+            }
+
+            return result
+        }
+        
+        const parseBSPNode = function ()
+        {
+            const nodeType = dv.getUint8(cursor)
             cursor++
 
-            switch (type)
+            switch (nodeType)
             {
-            case 0x00: // Past end of data. TODO: Don't parse like this. We shouldn't go past the end.
-                done = true
-                break
-            case FaceCmd.FaceGroup:
+            case NodeType.Branch:
             {
-                var groupDone = false
-                while (!groupDone)
-                {
-                    const numVerts = dv.getUint8(cursor)
-                    cursor++
-                    if (numVerts >= 0xFE)
-                    {
-                        console.warn(`End of facegroup marker 0x${numVerts.toString(16)} encountered`)
-                        groupDone = true
-                        break
-                    }
-
-                    const faceId = dv.getUint8(cursor)
-                    cursor++
-                    const color = dv.getUint8(cursor)
-                    cursor++
-                    const nx = dv.getUint8(cursor)
-                    cursor++
-                    const ny = dv.getUint8(cursor)
-                    cursor++
-                    const nz = dv.getUint8(cursor)
-                    cursor++
-
-                    const verts = []
-                    for (let i = 0; i < numVerts; i++)
-                    {
-                        verts.push(dv.getUint8(cursor))
-                        cursor++
-                    }
-
-                    console.log(`Facegroup: num verts ${numVerts}; face id ${faceId}; color ${color}; n ${nx},${ny},${nz}; verts ${verts}`)
-                }
-                break
-            }
-            case FaceCmd.TriangleList:
-            {
-                const num = dv.getUint8(cursor)
+                const splittingTri = dv.getUint8(cursor)
                 cursor++
-                for (let i = 0; i < num; i++)
-                {
-                    const tri0 = dv.getUint8(cursor)
-                    cursor++
-                    const tri1 = dv.getUint8(cursor)
-                    cursor++
-                    const tri2 = dv.getUint8(cursor)
-                    cursor++
+                const facegroupOffset = dv.getUint16(cursor, true)
+                cursor += 2
+                const frontBranchOffset = dv.getUint8(cursor)
+                cursor++
+                // The renderer would check whether the camera is in front of the splitting
+                // triangle and render the back node if not. Otherwise, only the front node is
+                // rendered. To avoid parsing back node data, the cursor is increased by
+                // frontBranchOffset.
 
-                    triangleList.push(tri0, tri1, tri2)
-                }
+                console.log(`Node: split tri ${splittingTri}; facegroup 0x${facegroupOffset.toString(16)}; front offset ${frontBranchOffset}`)
+
+                const backNode = parseBSPNode()
+                if (frontBranchOffset == 0)
+                    throw new Error(`Front branch offset = 0 detected; breakage imminent!`)
+                const frontNode = parseBSPNode()
                 break
             }
-            case FaceCmd.BSPTree:
+            case NodeType.Leaf:
             {
-                const parseNode = function ()
-                {
-                    const nodeType = dv.getUint8(cursor)
-                    cursor++
+                const facegroupOffset = dv.getUint16(cursor, true)
+                cursor += 2
+                console.log(`Leaf: facegroup 0x${facegroupOffset.toString(16)}`)
 
-                    switch (nodeType)
-                    {
-                    case NodeType.Branch:
-                    {
-                        const splittingTri = dv.getUint8(cursor)
-                        cursor++
-                        const facegroupOffset = dv.getUint16(cursor, true)
-                        cursor += 2
-                        const frontBranchOffset = dv.getUint8(cursor)
-                        cursor++
-                        // The renderer would check whether the camera is in front of the splitting
-                        // triangle and render the back node if not. Otherwise, only the front node is
-                        // rendered. To avoid parsing back node data, the cursor is increased by
-                        // frontBranchOffset.
-
-                        console.log(`Node: split tri ${splittingTri}; facegroup 0x${facegroupOffset.toString(16)}; front offset ${frontBranchOffset}`)
-
-                        const backNode = parseNode()
-                        if (frontBranchOffset == 0)
-                            throw new Error(`Front branch offset = 0 detected; breakage imminent!`)
-                        const frontNode = parseNode()
-                        break
-                    }
-                    case NodeType.Leaf:
-                    {
-                        const facegroupOffset = dv.getUint16(cursor, true)
-                        cursor += 2
-                        console.log(`Leaf: facegroup 0x${facegroupOffset.toString(16)}`)
-                        break
-                    }
-                    default:
-                        throw new Error(`Unknown BSP node type 0x${nodeType.toString(16)}`)
-                    }
-                }
-
-                console.log(`BSP Tree:`)
-                parseNode()
-
+                const oldCursor = cursor
+                cursor += facegroupOffset
+                parseFaceGroup()
+                cursor = oldCursor
                 break
             }
             default:
-                throw new Error(`Unknown face entry type 0x${type.toString(16)}`)
+                throw new Error(`Unknown BSP node type 0x${nodeType.toString(16)}`)
             }
         }
 
-        this.indexBuffer = gl.createBuffer()
-        gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, this.indexBuffer)
-        gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint8Array(triangleList), gl.STATIC_DRAW)
-        this.numIndices = triangleList.length
+        // Load faces
+        cursor = facesOffset
+
+        if (dv.getUint8(cursor) == FaceCmd.TriangleList)
+        {
+            cursor++
+            parseTriangleList() // Ignored
+        }
+
+        if (dv.getUint8(cursor) == FaceCmd.FaceGroup)
+        {
+            cursor++
+            parseFaceGroup()
+        }
+        else if (dv.getUint8(cursor) == FaceCmd.BSPTree)
+        {
+            cursor++
+            parseBSPNode()
+        }
     }
 
     render(modelMatrix: mat4, viewProjMatrix: mat4)
@@ -356,13 +367,7 @@ class SFXObject
         gl.uniformMatrix4fv(this.shader.uModelMatrix, false, modelMatrix)
         gl.uniformMatrix4fv(this.shader.uViewProjMatrix, false, viewProjMatrix)
 
-        gl.bindBuffer(gl.ARRAY_BUFFER, this.vertexBuffer)
-        gl.enableVertexAttribArray(this.shader.aPosition)
-        gl.vertexAttribPointer(this.shader.aPosition, 3, gl.FLOAT, false, 0, 0)
-
-        //gl.drawArrays(gl.POINTS, 0, this.numVertices)
-        gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, this.indexBuffer)
-        gl.drawElements(gl.TRIANGLES, this.numIndices, gl.UNSIGNED_BYTE, 0)
+        // TODO: render object
     }
 }
 

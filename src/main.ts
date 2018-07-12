@@ -42,7 +42,7 @@ function compileShader(shaderType: number, source: string): WebGLShader
     if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS))
     {
         console.error(gl.getShaderInfoLog(shader))
-        return null
+        throw new Error('Failed to compile shader')
     }
 
     return shader
@@ -53,18 +53,18 @@ function compileProgram(vertexShaderSource: string, fragmentShaderSource: string
     const vertexShader = compileShader(gl.VERTEX_SHADER, vertexShaderSource)
     const fragmentShader = compileShader(gl.FRAGMENT_SHADER, fragmentShaderSource)
 
-    const shaderProgram = gl.createProgram()
-    gl.attachShader(shaderProgram, vertexShader)
-    gl.attachShader(shaderProgram, fragmentShader)
-    gl.linkProgram(shaderProgram)
+    const program = gl.createProgram()
+    gl.attachShader(program, vertexShader)
+    gl.attachShader(program, fragmentShader)
+    gl.linkProgram(program)
 
-    if (!gl.getProgramParameter(shaderProgram, gl.LINK_STATUS))
+    if (!gl.getProgramParameter(program, gl.LINK_STATUS))
     {
-        console.error(gl.getProgramInfoLog(shaderProgram))
-        throw("Failed to initialize shaders")
+        console.error(gl.getProgramInfoLog(program))
+        throw new Error('Failed to compile program')
     }
 
-    return shaderProgram
+    return program
 }
 
 const SFX_VERTEX_SHADER_SOURCE =
@@ -131,8 +131,15 @@ enum VertexCmd
 
 enum FaceCmd
 {
+    FaceGroup = 0x14,
     TriangleList = 0x30,
     BSPTree = 0x3C,
+}
+
+enum NodeType
+{
+    Branch = 0x28,
+    Leaf = 0x44,
 }
 
 class SFXObject
@@ -220,6 +227,45 @@ class SFXObject
 
             switch (type)
             {
+            case 0x00: // Past end of data. TODO: Don't parse like this. We shouldn't go past the end.
+                done = true
+                break
+            case FaceCmd.FaceGroup:
+            {
+                var groupDone = false
+                while (!groupDone)
+                {
+                    const numVerts = dv.getUint8(cursor)
+                    cursor++
+                    if (numVerts >= 0xFE)
+                    {
+                        console.warn(`End of facegroup marker 0x${numVerts.toString(16)} encountered`)
+                        groupDone = true
+                        break
+                    }
+
+                    const faceId = dv.getUint8(cursor)
+                    cursor++
+                    const color = dv.getUint8(cursor)
+                    cursor++
+                    const nx = dv.getUint8(cursor)
+                    cursor++
+                    const ny = dv.getUint8(cursor)
+                    cursor++
+                    const nz = dv.getUint8(cursor)
+                    cursor++
+
+                    const verts = []
+                    for (let i = 0; i < numVerts; i++)
+                    {
+                        verts.push(dv.getUint8(cursor))
+                        cursor++
+                    }
+
+                    console.log(`Facegroup: num verts ${numVerts}; face id ${faceId}; color ${color}; n ${nx},${ny},${nz}; verts ${verts}`)
+                }
+                break
+            }
             case FaceCmd.TriangleList:
             {
                 const num = dv.getUint8(cursor)
@@ -239,17 +285,49 @@ class SFXObject
             }
             case FaceCmd.BSPTree:
             {
-                const nodeType = dv.getUint8(cursor)
-                cursor++
-
-                switch (nodeType)
+                const parseNode = function ()
                 {
-                default:
-                    done = true;
-                    console.warn(`BSP tree ignored`) // TODO: read BSP tree
-                    break
-                    //throw new Error(`Unknown BSP node type 0x${nodeType.toString(16)}`)
+                    const nodeType = dv.getUint8(cursor)
+                    cursor++
+
+                    switch (nodeType)
+                    {
+                    case NodeType.Branch:
+                    {
+                        const splittingTri = dv.getUint8(cursor)
+                        cursor++
+                        const facegroupOffset = dv.getUint16(cursor, true)
+                        cursor += 2
+                        const frontBranchOffset = dv.getUint8(cursor)
+                        cursor++
+                        // The renderer would check whether the camera is in front of the splitting
+                        // triangle and render the back node if not. Otherwise, only the front node is
+                        // rendered. To avoid parsing back node data, the cursor is increased by
+                        // frontBranchOffset.
+
+                        console.log(`Node: split tri ${splittingTri}; facegroup 0x${facegroupOffset.toString(16)}; front offset ${frontBranchOffset}`)
+
+                        const backNode = parseNode()
+                        if (frontBranchOffset == 0)
+                            throw new Error(`Front branch offset = 0 detected; breakage imminent!`)
+                        const frontNode = parseNode()
+                        break
+                    }
+                    case NodeType.Leaf:
+                    {
+                        const facegroupOffset = dv.getUint16(cursor, true)
+                        cursor += 2
+                        console.log(`Leaf: facegroup 0x${facegroupOffset.toString(16)}`)
+                        break
+                    }
+                    default:
+                        throw new Error(`Unknown BSP node type 0x${nodeType.toString(16)}`)
+                    }
                 }
+
+                console.log(`BSP Tree:`)
+                parseNode()
+
                 break
             }
             default:

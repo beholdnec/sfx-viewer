@@ -12,6 +12,27 @@ function mat4_mul(a: mat4, b: mat4)
     return result
 }
 
+function mat4_rotateX(rad: number)
+{
+    const result = mat4.create()
+    mat4.rotateX(result, mat4.create(), rad)
+    return result
+}
+
+function mat4_rotateY(rad: number)
+{
+    const result = mat4.create()
+    mat4.rotateY(result, mat4.create(), rad)
+    return result
+}
+
+function mat4_rotateZ(rad: number)
+{
+    const result = mat4.create()
+    mat4.rotateZ(result, mat4.create(), rad)
+    return result
+}
+
 function compileShader(shaderType: number, source: string): WebGLShader
 {
     const shader = gl.createShader(shaderType)
@@ -242,20 +263,11 @@ class SFXObject
         this.numIndices = triangleList.length
     }
 
-    render()
+    render(modelMatrix: mat4, viewProjMatrix: mat4)
     {
         gl.useProgram(this.shader.program)
 
-        const modelMatrix = mat4.create()
         gl.uniformMatrix4fv(this.shader.uModelMatrix, false, modelMatrix)
-
-        const viewMatrix = mat4.create()
-        mat4.translate(viewMatrix, viewMatrix, [0., 0., -255])
-
-        const projMatrix = mat4.create()
-        mat4.perspective(projMatrix, 45, canvas.width / canvas.height, 0.01, 10000.0)
-        
-        const viewProjMatrix = mat4_mul(projMatrix, viewMatrix)
         gl.uniformMatrix4fv(this.shader.uViewProjMatrix, false, viewProjMatrix)
 
         gl.bindBuffer(gl.ARRAY_BUFFER, this.vertexBuffer)
@@ -268,20 +280,52 @@ class SFXObject
     }
 }
 
-function loadRom(rom: ArrayBuffer)
+class SFXViewer
 {
-    console.log(`Loading ROM...`)
+    sfxObject: SFXObject
 
-    gl.clearColor(0.1, 0.2, 0.3, 1)
-    gl.clearDepth(1.0)
-    gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT)
+    constructor()
+    {
 
-    // Note: Many sources assume there is a 0x200-byte padding at the beginning of the ROM.
-    // TODO: Detect and handle this padding.
-    const sfxObj = new SFXObject(rom, 0x66001, 0x66042)
+    }
 
-    sfxObj.render()
+    loadRom(rom: ArrayBuffer)
+    {
+        console.log(`Loading ROM...`)
+    
+        // Note: Many sources assume there is a 0x200-byte padding at the beginning of the ROM.
+        // TODO: Detect and handle this padding.
+        this.sfxObject = new SFXObject(rom, 0x66001, 0x66042)
+
+        this.render(performance.now())
+    }
+
+    render(now: number)
+    {
+        gl.clearColor(0.1, 0.2, 0.3, 1)
+        gl.clearDepth(1.0)
+        gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT)
+
+        gl.enable(gl.DEPTH_TEST)
+
+        const modelMatrix = mat4_mul(
+            mat4_rotateX(now / 1000),
+            mat4_rotateY(now / 2000)
+        )
+
+        const viewMatrix = mat4.create()
+        mat4.translate(viewMatrix, viewMatrix, [0., 0., -150])
+
+        const projMatrix = mat4.create()
+        mat4.perspective(projMatrix, 45, canvas.width / canvas.height, 0.01, 10000.0)
+        
+        const viewProjMatrix = mat4_mul(projMatrix, viewMatrix)
+
+        this.sfxObject.render(modelMatrix, viewProjMatrix)
+    }
 }
+
+var viewer: SFXViewer = null
 
 const fileInput = <HTMLInputElement>document.getElementById('file-input')
 fileInput.onchange = function (event)
@@ -294,9 +338,22 @@ fileInput.onchange = function (event)
     {
         if (evt.target.readyState == FileReader.DONE)
         {
-            loadRom(reader.result)
+            viewer = new SFXViewer()
+            viewer.loadRom(reader.result)
         }
     }
 
     reader.readAsArrayBuffer(file)
 }
+
+function onFrame(now: number)
+{
+    if (viewer)
+    {
+        viewer.render(now)
+    }
+
+    window.requestAnimationFrame(onFrame)
+}
+
+onFrame(performance.now())

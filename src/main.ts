@@ -3,6 +3,14 @@ import { mat4 } from 'gl-matrix'
 console.log('Hello, world!')
 
 const canvas = <HTMLCanvasElement>document.getElementById('main-canvas')
+const desiredWidth = canvas.width
+const desiredHeight = canvas.height
+canvas.setAttribute('style', `width: ${desiredWidth}px; height: ${desiredHeight}px`)
+const devicePixelRatio = window.devicePixelRatio || 1
+canvas.width = desiredWidth * devicePixelRatio
+canvas.height = desiredHeight * devicePixelRatio
+
+// Get GL context AFTER resizing canvas, otherwise the viewport is wrong.
 const gl = <WebGL2RenderingContext>canvas.getContext('webgl2')
 
 function mat4_mul(a: mat4, b: mat4)

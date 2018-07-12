@@ -173,6 +173,8 @@ class SFXObject
 
         const dv = new DataView(rom)
 
+        const self = this
+
         // Load vertices
         this.vertices = []
         var cursor = verticesOffset
@@ -330,7 +332,8 @@ class SFXObject
 
                 const oldCursor = cursor
                 cursor += facegroupOffset
-                parseFaceGroup()
+                const faces = parseFaceGroup()
+                self.faces = self.faces.concat(faces)
                 cursor = oldCursor
                 break
             }
@@ -351,7 +354,8 @@ class SFXObject
         if (dv.getUint8(cursor) == FaceCmd.FaceGroup)
         {
             cursor++
-            parseFaceGroup()
+            const faces = parseFaceGroup()
+            self.faces = self.faces.concat(faces)
         }
         else if (dv.getUint8(cursor) == FaceCmd.BSPTree)
         {
@@ -367,7 +371,28 @@ class SFXObject
         gl.uniformMatrix4fv(this.shader.uModelMatrix, false, modelMatrix)
         gl.uniformMatrix4fv(this.shader.uViewProjMatrix, false, viewProjMatrix)
 
+        const vertexBuffer = gl.createBuffer()
+
         // TODO: render object
+        for (let i = 0; i < this.faces.length; i++)
+        {
+            const face = this.faces[i]
+
+            const vertexData = []
+            for (let j = 0; j < face.verts.length; j++)
+            {
+                const v = face.verts[j]
+                vertexData.push(this.vertices[v * 3])
+                vertexData.push(this.vertices[v * 3 + 1])
+                vertexData.push(this.vertices[v * 3 + 2])
+            }
+
+            gl.bindBuffer(gl.ARRAY_BUFFER, vertexBuffer)
+            gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(vertexData), gl.STREAM_DRAW)
+            gl.enableVertexAttribArray(this.shader.aPosition)
+            gl.vertexAttribPointer(this.shader.aPosition, 3, gl.FLOAT, false, 0, 0)
+            gl.drawArrays(gl.TRIANGLE_STRIP, 0, face.numVerts)
+        }
     }
 }
 

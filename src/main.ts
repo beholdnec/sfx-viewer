@@ -209,6 +209,8 @@ class SFXObject
         // Load vertices
         this.loadFrame(0)
 
+        console.log(`${this.vertices.length / 3} vertices loaded`)
+
         const parseTriangleList = function ()
         {
             const result = []
@@ -351,6 +353,8 @@ class SFXObject
             cursor++
             parseBSPNode()
         }
+
+        console.log(`${this.faces.length} faces loaded`)
     }
 
     loadFrame(frame: number)
@@ -465,8 +469,12 @@ class SFXObject
     }
 }
 
+const SF1_OBJECT_LIST_ADDRESS = 0x2C15
+const SF1_OBJECT_HEADER_LENGTH = 0x1C
+
 class SFXViewer
 {
+    rom: ArrayBuffer
     sfxObject: SFXObject
     modelMatrix: mat4 = mat4.create()
 
@@ -478,6 +486,8 @@ class SFXViewer
     loadRom(rom: ArrayBuffer)
     {
         console.log(`Loading ROM...`)
+
+        this.rom = rom
     
         // Note: Many sources assume there is a 0x200-byte padding at the beginning of the ROM.
         // TODO: Detect and handle this padding.
@@ -486,10 +496,8 @@ class SFXViewer
         //this.sfxObject = new SFXObject(rom, 0x66001, 0x66042)
         // Phantron transformation
         //this.sfxObject = new SFXObject(rom, 0x75916, 0x75F42)
-        // Phantron
-        //this.sfxObject = new SFXObject(rom, 0x74324, 0x7435C)
         // Andross face morph
-        this.sfxObject = new SFXObject(rom, 0x7E29E, 0x7E886)
+        //this.sfxObject = new SFXObject(rom, 0x7E29E, 0x7E886)
         // Andross sucking
         //this.sfxObject = new SFXObject(rom, 0x7EB81, 0x7F05B)
         // Andross evil face morph
@@ -497,6 +505,32 @@ class SFXViewer
         // Helicopter
         //this.sfxObject = new SFXObject(rom, 0x7B193, 0x7B215)
 
+        this.loadObject(SF1_OBJECT_LIST_ADDRESS + SF1_OBJECT_HEADER_LENGTH * 2)
+    }
+
+    loadObject(headerAddress: number)
+    {
+        const dv = new DataView(this.rom)
+
+        // The ROM is divided into banks of 0x8000 bytes each. These banks are mapped onto the SNES
+        // bus with a fairly complex formula (LoROM). Fortunately, this field simply specifies the
+        // ROM bank, so there is no need to worry about SNES memory mapping.
+        const bank = dv.getUint8(headerAddress + 2)
+        // ??? I don't know why we use "bank - 1" instead of just "bank". Possibly because bank "0"
+        // marks a null object.
+        if (bank != 0)
+        {
+            const verticesAddress = (0x8000 * (bank - 1)) + dv.getUint16(headerAddress, true)
+            const facesAddress = (0x8000 * (bank - 1)) + dv.getUint16(headerAddress + 3, true)
+
+            console.log(`Loading from verts address 0x${verticesAddress.toString(16)}; faces address 0x${facesAddress.toString(16)}`)
+            this.sfxObject = new SFXObject(this.rom, verticesAddress, facesAddress)
+        }
+        else
+        {
+            console.warn(`No object found at header address 0x${headerAddress.toString(16)}`)
+            this.sfxObject = null
+        }
 
         this.render()
     }
@@ -512,17 +546,20 @@ class SFXViewer
         gl.clearDepth(1.0)
         gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT)
 
-        gl.enable(gl.DEPTH_TEST)
+        if (this.sfxObject)
+        {
+            gl.enable(gl.DEPTH_TEST)
 
-        const viewMatrix = mat4.create()
-        mat4.translate(viewMatrix, viewMatrix, [0., 0., -150])
+            const viewMatrix = mat4.create()
+            mat4.translate(viewMatrix, viewMatrix, [0., 0., -150])
 
-        const projMatrix = mat4.create()
-        mat4.perspective(projMatrix, 45, canvas.width / canvas.height, 0.01, 10000.0)
-        
-        const viewProjMatrix = mat4_mul(projMatrix, viewMatrix)
+            const projMatrix = mat4.create()
+            mat4.perspective(projMatrix, 45, canvas.width / canvas.height, 0.01, 10000.0)
+            
+            const viewProjMatrix = mat4_mul(projMatrix, viewMatrix)
 
-        this.sfxObject.render(this.modelMatrix, viewProjMatrix)
+            this.sfxObject.render(this.modelMatrix, viewProjMatrix)
+        }
     }
 }
 

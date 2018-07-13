@@ -193,7 +193,6 @@ class SFXObject
     shader: SFXShader
 
     vertexBuffer = gl.createBuffer()
-    indexBuffer = gl.createBuffer()
 
     constructor(rom: ArrayBuffer, verticesAddress: number, facesAddress: number)
     {
@@ -289,6 +288,13 @@ class SFXObject
                 cursor++
                 const facegroupOffset = dv.getUint16(cursor, true)
                 cursor += 2
+
+                const oldCursor = cursor
+                cursor += facegroupOffset
+                const faces = parseFaceGroup()
+                self.faces = self.faces.concat(faces)
+                cursor = oldCursor
+                
                 const frontBranchOffset = dv.getUint8(cursor)
                 cursor++
                 // The renderer would check whether the camera is in front of the splitting
@@ -454,11 +460,7 @@ class SFXObject
             gl.enableVertexAttribArray(this.shader.aPosition)
             gl.vertexAttribPointer(this.shader.aPosition, 3, gl.FLOAT, false, 0, 0)
 
-            // Render quads properly
-            gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, this.indexBuffer)
-            gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint8Array([0, 1, 2, 0, 2, 3]), gl.STREAM_DRAW)
-            //gl.drawArrays(gl.TRIANGLE_STRIP, 0, face.numVerts)
-            gl.drawElements(gl.TRIANGLES, face.numVerts == 4 ? 6 : 3, gl.UNSIGNED_BYTE, 0)
+            gl.drawArrays(gl.TRIANGLE_FAN, 0, face.numVerts)
         }
     }
 }
@@ -484,7 +486,7 @@ class SFXViewer
         //this.sfxObject = new SFXObject(rom, 0x66001, 0x66042)
         // Andross face morph
         //this.sfxObject = new SFXObject(rom, 0x7E29E, 0x7E886)
-        // Andross face morph 2
+        // Andross sucking
         //this.sfxObject = new SFXObject(rom, 0x7EB81, 0x7F05B)
         // Andross evil face morph
         this.sfxObject = new SFXObject(rom, 0x8E1FE, 0x8EA22)

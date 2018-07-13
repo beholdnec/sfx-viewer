@@ -554,7 +554,7 @@ function render()
     {
         var modelMatrix = mat4_mul(
             mat4_rotateX(vertRotation),
-            mat4_rotateZ(horzRotation)
+            mat4_rotateY(horzRotation)
         )
         // Invert Y axis since SuperFX coordinate system is upside-down from WebGL.
         modelMatrix = mat4_mul(

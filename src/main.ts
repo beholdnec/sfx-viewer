@@ -124,7 +124,7 @@ void main()
     vec3 incident = vec3(0., 0., -1.);
     vec3 L = normalize(-incident);
     vec3 N = normalize(cross(dFdx(vWorldPosition), dFdy(vWorldPosition)));
-    float NdotL = dot(N, L);
+    float NdotL = clamp(dot(N, L), 0., 1.);
     oColor = vec4(vec3(NdotL), 1.);
 }
 `
@@ -399,7 +399,7 @@ class SFXObject
                 this.curFrame = clamp(frame, 0, this.numFrames - 1)
 
                 // Jump to frame
-                cursor += frame * 2
+                cursor += this.curFrame * 2
                 const frameOffset = dv.getUint16(cursor, true)
                 cursor += frameOffset + 1
 
@@ -484,6 +484,10 @@ class SFXViewer
 
         // Big high poly Arwing
         //this.sfxObject = new SFXObject(rom, 0x66001, 0x66042)
+        // Phantron transformation
+        //this.sfxObject = new SFXObject(rom, 0x75916, 0x75F42)
+        // Phantron
+        //this.sfxObject = new SFXObject(rom, 0x74324, 0x7435C)
         // Andross face morph
         this.sfxObject = new SFXObject(rom, 0x7E29E, 0x7E886)
         // Andross sucking
@@ -588,19 +592,33 @@ canvas.addEventListener('pointermove', function (ev) {
 
 const FRAMES_PER_SECOND = 10
 const FRAME_MILLIS = 1000 / FRAMES_PER_SECOND
+const MAX_DELTA = 2000
 
-function onFrame(now: number)
+function advance(delta_: number)
 {
     if (viewer && viewer.sfxObject)
     {
-        const delta = now - lastFrameTime
-        if (delta >= FRAME_MILLIS)
+        if (delta_ >= MAX_DELTA)
         {
+            // Too much lag; resync frame timer
+            lastFrameTime += delta_ - MAX_DELTA
+        }
+
+        var delta = clamp(delta_, 0, MAX_DELTA)
+        while (delta >= FRAME_MILLIS)
+        {
+            delta -= FRAME_MILLIS
             lastFrameTime += FRAME_MILLIS
             viewer.sfxObject.loadFrame((viewer.sfxObject.curFrame + 1) % viewer.sfxObject.numFrames)
-            viewer.render()
         }
+
+        viewer.render()
     }
+}
+
+function onFrame(now: number)
+{
+    advance(now - lastFrameTime)
 
     window.requestAnimationFrame(onFrame)
 }

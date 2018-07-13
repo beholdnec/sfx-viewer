@@ -294,7 +294,7 @@ class SFXObject
                 const faces = parseFaceGroup()
                 self.faces = self.faces.concat(faces)
                 cursor = oldCursor
-                
+
                 const frontBranchOffset = dv.getUint8(cursor)
                 cursor++
                 // The renderer would check whether the camera is in front of the splitting
@@ -558,10 +558,10 @@ function render()
             mat4_rotateX(vertRotation),
             mat4_rotateY(horzRotation)
         )
-        // Invert Y axis since SuperFX coordinate system is upside-down from WebGL.
+        // Invert Y and Z axes since SuperFX coordinate system is upside-down and reversed from WebGL.
         modelMatrix = mat4_mul(
             modelMatrix,
-            mat4_scale(1, -1, 1)
+            mat4_scale(1, -1, -1)
         )
         viewer.setModelMatrix(modelMatrix)
         viewer.render()

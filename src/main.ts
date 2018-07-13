@@ -446,25 +446,38 @@ class SFXObject
         gl.uniformMatrix4fv(this.shader.uModelMatrix, false, modelMatrix)
         gl.uniformMatrix4fv(this.shader.uViewProjMatrix, false, viewProjMatrix)
 
-        for (let i = 0; i < this.faces.length; i++)
+        if (this.faces.length > 0)
         {
-            const face = this.faces[i]
-
-            const vertexData = []
-            for (let j = 0; j < face.verts.length; j++)
+            for (let i = 0; i < this.faces.length; i++)
             {
-                const v = face.verts[j]
-                vertexData.push(this.vertices[v * 3])
-                vertexData.push(this.vertices[v * 3 + 1])
-                vertexData.push(this.vertices[v * 3 + 2])
-            }
+                const face = this.faces[i]
 
+                const vertexData = []
+                for (let j = 0; j < face.verts.length; j++)
+                {
+                    const v = face.verts[j]
+                    vertexData.push(this.vertices[v * 3])
+                    vertexData.push(this.vertices[v * 3 + 1])
+                    vertexData.push(this.vertices[v * 3 + 2])
+                }
+
+                gl.bindBuffer(gl.ARRAY_BUFFER, this.vertexBuffer)
+                gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(vertexData), gl.STREAM_DRAW)
+                gl.enableVertexAttribArray(this.shader.aPosition)
+                gl.vertexAttribPointer(this.shader.aPosition, 3, gl.FLOAT, false, 0, 0)
+
+                gl.drawArrays(gl.TRIANGLE_FAN, 0, face.numVerts)
+            }
+        }
+        else
+        {
+            // No faces defined; draw points
             gl.bindBuffer(gl.ARRAY_BUFFER, this.vertexBuffer)
-            gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(vertexData), gl.STREAM_DRAW)
+            gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(this.vertices), gl.STREAM_DRAW)
             gl.enableVertexAttribArray(this.shader.aPosition)
             gl.vertexAttribPointer(this.shader.aPosition, 3, gl.FLOAT, false, 0, 0)
 
-            gl.drawArrays(gl.TRIANGLE_FAN, 0, face.numVerts)
+            gl.drawArrays(gl.POINTS, 0, this.vertices.length / 3)
         }
     }
 }
@@ -505,7 +518,7 @@ class SFXViewer
         // Helicopter
         //this.sfxObject = new SFXObject(rom, 0x7B193, 0x7B215)
 
-        this.loadObject(SF1_OBJECT_LIST_ADDRESS + SF1_OBJECT_HEADER_LENGTH * 2)
+        this.loadObject(SF1_OBJECT_LIST_ADDRESS + SF1_OBJECT_HEADER_LENGTH * 16)
     }
 
     loadObject(headerAddress: number)

@@ -41,6 +41,13 @@ function mat4_rotateZ(rad: number)
     return result
 }
 
+function mat4_scale(x: number, y: number, z: number)
+{
+    const result = mat4.create()
+    mat4.fromScaling(result, [x, y, z])
+    return result
+}
+
 function compileShader(shaderType: number, source: string): WebGLShader
 {
     const shader = gl.createShader(shaderType)
@@ -430,6 +437,7 @@ class SFXObject
 class SFXViewer
 {
     sfxObject: SFXObject
+    modelMatrix: mat4 = mat4.create()
 
     constructor()
     {
@@ -446,30 +454,30 @@ class SFXViewer
         // Big high poly Arwing
         //this.sfxObject = new SFXObject(rom, 0x66001, 0x66042)
         // Andross face morph
-        this.sfxObject = new SFXObject(rom, 0x7E29E, 0x7E886)
+        //this.sfxObject = new SFXObject(rom, 0x7E29E, 0x7E886)
         // Andross face morph 2
         //this.sfxObject = new SFXObject(rom, 0x7EB81, 0x7F05B)
         // Andross evil face morph
-        //this.sfxObject = new SFXObject(rom, 0x8E1FE, 0x8EA22)
+        this.sfxObject = new SFXObject(rom, 0x8E1FE, 0x8EA22)
         // Helicopter
         //this.sfxObject = new SFXObject(rom, 0x7B193, 0x7B215)
 
 
-        this.render(performance.now())
+        this.render()
     }
 
-    render(now: number)
+    setModelMatrix(modelMatrix: mat4)
+    {
+        this.modelMatrix = mat4.clone(modelMatrix)
+    }
+
+    render()
     {
         gl.clearColor(0.1, 0.2, 0.3, 1)
         gl.clearDepth(1.0)
         gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT)
 
         gl.enable(gl.DEPTH_TEST)
-
-        const modelMatrix = mat4_mul(
-            mat4_rotateX(now / 1000),
-            mat4_rotateY(now / 2000)
-        )
 
         const viewMatrix = mat4.create()
         mat4.translate(viewMatrix, viewMatrix, [0., 0., -150])
@@ -479,11 +487,13 @@ class SFXViewer
         
         const viewProjMatrix = mat4_mul(projMatrix, viewMatrix)
 
-        this.sfxObject.render(modelMatrix, viewProjMatrix)
+        this.sfxObject.render(this.modelMatrix, viewProjMatrix)
     }
 }
 
 var viewer: SFXViewer = null
+var horzRotation: number = 0
+var vertRotation: number = 0
 
 const fileInput = <HTMLInputElement>document.getElementById('file-input')
 fileInput.onchange = function (event)
@@ -496,6 +506,8 @@ fileInput.onchange = function (event)
     {
         if (evt.target.readyState == FileReader.DONE)
         {
+            horzRotation = 0
+            vertRotation = 0
             viewer = new SFXViewer()
             viewer.loadRom(reader.result)
         }
@@ -504,12 +516,45 @@ fileInput.onchange = function (event)
     reader.readAsArrayBuffer(file)
 }
 
-function onFrame(now: number)
+function render()
 {
     if (viewer)
     {
-        viewer.render(now)
+        var modelMatrix = mat4_mul(
+            mat4_rotateX(vertRotation),
+            mat4_rotateZ(horzRotation)
+        )
+        // Invert Y axis since SuperFX coordinate system is upside-down from WebGL.
+        modelMatrix = mat4_mul(
+            modelMatrix,
+            mat4_scale(1, -1, 1)
+        )
+        viewer.setModelMatrix(modelMatrix)
+        viewer.render()
     }
+}
+
+var isPointerDown = false
+canvas.addEventListener('pointerdown', function (ev) {
+    this.setPointerCapture(ev.pointerId)
+    isPointerDown = true
+})
+canvas.addEventListener('pointerup', function (ev) {
+    isPointerDown = false
+})
+
+canvas.addEventListener('pointermove', function (ev) {
+    if (isPointerDown)
+    {
+        horzRotation += ev.movementX / 75 / Math.PI
+        vertRotation += ev.movementY / 75 / Math.PI
+        render()
+    }
+})
+
+function onFrame(now: number)
+{
+    viewer.render()
 
     window.requestAnimationFrame(onFrame)
 }

@@ -485,11 +485,11 @@ class SFXViewer
         // Big high poly Arwing
         //this.sfxObject = new SFXObject(rom, 0x66001, 0x66042)
         // Andross face morph
-        //this.sfxObject = new SFXObject(rom, 0x7E29E, 0x7E886)
+        this.sfxObject = new SFXObject(rom, 0x7E29E, 0x7E886)
         // Andross sucking
         //this.sfxObject = new SFXObject(rom, 0x7EB81, 0x7F05B)
         // Andross evil face morph
-        this.sfxObject = new SFXObject(rom, 0x8E1FE, 0x8EA22)
+        //this.sfxObject = new SFXObject(rom, 0x8E1FE, 0x8EA22)
         // Helicopter
         //this.sfxObject = new SFXObject(rom, 0x7B193, 0x7B215)
 

@@ -13,6 +13,16 @@ canvas.height = desiredHeight * devicePixelRatio
 // Get GL context AFTER resizing canvas, otherwise the viewport is wrong.
 const gl = <WebGL2RenderingContext>canvas.getContext('webgl2')
 
+function clamp(a: number, lo: number, hi: number)
+{
+    if (a < lo)
+        return lo
+    else if (a > hi)
+        return hi
+    else
+        return a
+}
+
 function mat4_mul(a: mat4, b: mat4)
 {
     const result = mat4.create()
@@ -173,6 +183,11 @@ class Face
 
 class SFXObject
 {
+    rom: ArrayBuffer
+    verticesAddress: number = 0
+    facesAddress: number = 0
+    curFrame: number = 0
+    numFrames: number = 0
     vertices: number[] = []
     faces: Face[] = []
     shader: SFXShader
@@ -180,8 +195,12 @@ class SFXObject
     vertexBuffer = gl.createBuffer()
     indexBuffer = gl.createBuffer()
 
-    constructor(rom: ArrayBuffer, verticesOffset: number, facesOffset: number)
+    constructor(rom: ArrayBuffer, verticesAddress: number, facesAddress: number)
     {
+        this.rom = rom
+        this.verticesAddress = verticesAddress
+        this.facesAddress = this.facesAddress
+
         this.shader = new SFXShader()
 
         const dv = new DataView(rom)
@@ -189,79 +208,7 @@ class SFXObject
         const self = this
 
         // Load vertices
-        this.vertices = []
-        var cursor = verticesOffset
-        var done = false
-        while (!done)
-        {
-            const type = dv.getUint8(cursor)
-            cursor++
-
-            switch (type)
-            {
-            case VertexCmd.Plain:
-            {
-                const num = dv.getUint8(cursor)
-                cursor++
-                for (let i = 0; i < num; i++)
-                {
-                    const x = dv.getInt8(cursor)
-                    cursor++
-                    const y = dv.getInt8(cursor)
-                    cursor++
-                    const z = dv.getInt8(cursor)
-                    cursor++
-
-                    this.vertices.push(x, y, z)
-                }
-                break
-            }
-            case VertexCmd.End:
-                console.log(`End of verts`)
-                done = true
-                break
-            case VertexCmd.AnimatedList:
-            {
-                const numFrames = dv.getUint8(cursor)
-                cursor++
-
-                console.log(`Animated model with ${numFrames} frames`)
-
-                // Jump to a frame
-                cursor += (numFrames - 1) * 2 /* Jump to final frame */
-                const frameOffset = dv.getUint16(cursor, true)
-                cursor += frameOffset + 1
-
-                break
-            }
-            case VertexCmd.Jump:
-            {
-                const offset = dv.getUint16(cursor, true) // FIXME: signed?
-                cursor += offset + 1
-                break
-            }
-            case VertexCmd.XFlipped:
-            {
-                const num = dv.getUint8(cursor)
-                cursor++
-                for (let i = 0; i < num; i++)
-                {
-                    const x = dv.getInt8(cursor)
-                    cursor++
-                    const y = dv.getInt8(cursor)
-                    cursor++
-                    const z = dv.getInt8(cursor)
-                    cursor++
-
-                    this.vertices.push(x, y, z)
-                    this.vertices.push(-x, y, z)
-                }
-                break
-            }
-            default:
-                throw new Error(`Unknown vertex entry type 0x${type.toString(16)}`)
-            }
-        }
+        this.loadFrame(0)
 
         const parseTriangleList = function ()
         {
@@ -379,7 +326,7 @@ class SFXObject
         }
 
         // Load faces
-        cursor = facesOffset
+        var cursor = facesAddress
 
         if (dv.getUint8(cursor) == FaceCmd.TriangleList)
         {
@@ -397,6 +344,88 @@ class SFXObject
         {
             cursor++
             parseBSPNode()
+        }
+    }
+
+    loadFrame(frame: number)
+    {
+        const dv = new DataView(this.rom)
+
+        // Assume a static model. These values are changed if an animated model is detected.
+        this.curFrame = 0
+        this.numFrames = 1
+
+        this.vertices = []
+        var cursor = this.verticesAddress
+        var done = false
+        while (!done)
+        {
+            const type = dv.getUint8(cursor)
+            cursor++
+
+            switch (type)
+            {
+            case VertexCmd.Plain:
+            {
+                const num = dv.getUint8(cursor)
+                cursor++
+                for (let i = 0; i < num; i++)
+                {
+                    const x = dv.getInt8(cursor)
+                    cursor++
+                    const y = dv.getInt8(cursor)
+                    cursor++
+                    const z = dv.getInt8(cursor)
+                    cursor++
+
+                    this.vertices.push(x, y, z)
+                }
+                break
+            }
+            case VertexCmd.End:
+                done = true
+                break
+            case VertexCmd.AnimatedList:
+            {
+                this.numFrames = dv.getUint8(cursor)
+                cursor++
+
+                this.curFrame = clamp(frame, 0, this.numFrames - 1)
+
+                // Jump to frame
+                cursor += frame * 2
+                const frameOffset = dv.getUint16(cursor, true)
+                cursor += frameOffset + 1
+
+                break
+            }
+            case VertexCmd.Jump:
+            {
+                const offset = dv.getUint16(cursor, true) // FIXME: signed?
+                cursor += offset + 1
+                break
+            }
+            case VertexCmd.XFlipped:
+            {
+                const num = dv.getUint8(cursor)
+                cursor++
+                for (let i = 0; i < num; i++)
+                {
+                    const x = dv.getInt8(cursor)
+                    cursor++
+                    const y = dv.getInt8(cursor)
+                    cursor++
+                    const z = dv.getInt8(cursor)
+                    cursor++
+
+                    this.vertices.push(x, y, z)
+                    this.vertices.push(-x, y, z)
+                }
+                break
+            }
+            default:
+                throw new Error(`Unknown vertex entry type 0x${type.toString(16)}`)
+            }
         }
     }
 
@@ -494,6 +523,7 @@ class SFXViewer
 var viewer: SFXViewer = null
 var horzRotation: number = 0
 var vertRotation: number = 0
+var lastFrameTime: number = performance.now()
 
 const fileInput = <HTMLInputElement>document.getElementById('file-input')
 fileInput.onchange = function (event)
@@ -508,8 +538,10 @@ fileInput.onchange = function (event)
         {
             horzRotation = 0
             vertRotation = 0
+            lastFrameTime = performance.now()
             viewer = new SFXViewer()
             viewer.loadRom(reader.result)
+            render()
         }
     }
 
@@ -552,9 +584,21 @@ canvas.addEventListener('pointermove', function (ev) {
     }
 })
 
+const FRAMES_PER_SECOND = 10
+const FRAME_MILLIS = 1000 / FRAMES_PER_SECOND
+
 function onFrame(now: number)
 {
-    viewer.render()
+    if (viewer && viewer.sfxObject)
+    {
+        const delta = now - lastFrameTime
+        if (delta >= FRAME_MILLIS)
+        {
+            lastFrameTime += FRAME_MILLIS
+            viewer.sfxObject.loadFrame((viewer.sfxObject.curFrame + 1) % viewer.sfxObject.numFrames)
+            viewer.render()
+        }
+    }
 
     window.requestAnimationFrame(onFrame)
 }

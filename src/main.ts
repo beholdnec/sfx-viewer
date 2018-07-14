@@ -11,7 +11,7 @@ canvas.width = desiredWidth * devicePixelRatio
 canvas.height = desiredHeight * devicePixelRatio
 
 // Get GL context AFTER resizing canvas, otherwise the viewport is wrong.
-const gl = <WebGL2RenderingContext>canvas.getContext('webgl2')
+const gl = <WebGL2RenderingContext>canvas.getContext('webgl')
 
 function clamp(a: number, lo: number, hi: number)
 {
@@ -114,18 +114,18 @@ function compileProgram(vertexShaderSource: string, fragmentShaderSource: string
 }
 
 const SFX_VERTEX_SHADER_SOURCE =
-`#version 300 es
+`
 precision mediump float;
 
-in vec3 aPosition;
-in vec3 aNormal;
+attribute vec3 aPosition;
+attribute vec3 aNormal;
 
 uniform mat4 uModelMatrix;
 uniform mat3 uNormalMatrix;
 uniform mat4 uViewProjMatrix;
 
-out vec3 vWorldPosition;
-out vec3 vWorldNormal;
+varying vec3 vWorldPosition;
+varying vec3 vWorldNormal;
 
 void main()
 {
@@ -137,16 +137,14 @@ void main()
 `
 
 const SFX_FRAGMENT_SHADER_SOURCE =
-`#version 300 es
+`
 precision mediump float;
 
-in vec3 vWorldPosition;
-in vec3 vWorldNormal;
+varying vec3 vWorldPosition;
+varying vec3 vWorldNormal;
 
 uniform vec3 uEye; // Currently unused
 uniform vec4 uColor;
-
-out vec4 oColor;
 
 void main()
 {
@@ -154,7 +152,7 @@ void main()
     vec3 L = normalize(-incident);
     vec3 N = normalize(vWorldNormal);
     float NdotL = clamp(dot(N, L), 0., 1.);
-    oColor = vec4(NdotL * uColor.rgb, uColor.a);
+    gl_FragColor = vec4(NdotL * uColor.rgb, uColor.a);
 }
 `
 

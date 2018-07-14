@@ -503,7 +503,12 @@ class SFXObject
                 gl.enableVertexAttribArray(this.shader.aPosition)
                 gl.vertexAttribPointer(this.shader.aPosition, 3, gl.FLOAT, false, 0, 0)
 
-                gl.drawArrays(gl.TRIANGLE_FAN, 0, face.numVerts)
+                if (face.numVerts >= 3)
+                    gl.drawArrays(gl.TRIANGLE_FAN, 0, face.numVerts)
+                else if (face.numVerts == 2)
+                    gl.drawArrays(gl.LINES, 0, 2)
+                else
+                    gl.drawArrays(gl.POINTS, 0, 1)
             }
         }
         else

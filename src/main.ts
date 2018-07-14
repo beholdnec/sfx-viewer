@@ -150,9 +150,11 @@ class SFXShader
 enum VertexCmd
 {
     Plain = 0x04,
+    Plain16 = 0x08,
     End = 0x0C,
     AnimatedList = 0x1C,
     Jump = 0x20,
+    XFlipped16 = 0x34,
     XFlipped = 0x38,
 }
 
@@ -392,6 +394,23 @@ class SFXObject
                 }
                 break
             }
+            case VertexCmd.Plain16:
+            {
+                const num = dv.getUint8(cursor)
+                cursor++
+                for (let i = 0; i < num; i++)
+                {
+                    const x = dv.getInt16(cursor, true)
+                    cursor += 2
+                    const y = dv.getInt16(cursor, true)
+                    cursor += 2
+                    const z = dv.getInt16(cursor, true)
+                    cursor += 2
+
+                    this.vertices.push(x, y, z)
+                }
+                break
+            }
             case VertexCmd.End:
                 done = true
                 break
@@ -413,6 +432,24 @@ class SFXObject
             {
                 const offset = dv.getUint16(cursor, true) // FIXME: signed?
                 cursor += offset + 1
+                break
+            }
+            case VertexCmd.XFlipped16:
+            {
+                const num = dv.getUint8(cursor)
+                cursor++
+                for (let i = 0; i < num; i++)
+                {
+                    const x = dv.getInt16(cursor, true)
+                    cursor += 2
+                    const y = dv.getInt16(cursor, true)
+                    cursor += 2
+                    const z = dv.getInt16(cursor, true)
+                    cursor += 2
+
+                    this.vertices.push(x, y, z)
+                    this.vertices.push(-x, y, z)
+                }
                 break
             }
             case VertexCmd.XFlipped:
@@ -482,7 +519,12 @@ class SFXObject
     }
 }
 
-const SF1_OBJECT_LIST_ADDRESS = 0x2C15
+// These are addresses of object header arrays. I don't know whether these are separate arrays or
+// or one big array that is being interpreted wrongly.
+//const SF1_OBJECT_LIST_ADDRESS = 0x2C15
+//const SF1_OBJECT_LIST_ADDRESS = 0x34DF
+//const SF1_OBJECT_LIST_ADDRESS = 0x38DB
+const SF1_OBJECT_LIST_ADDRESS = 0x5898
 const SF1_OBJECT_HEADER_LENGTH = 0x1C
 
 class SFXViewer
@@ -500,10 +542,10 @@ class SFXViewer
     {
         console.log(`Loading ROM...`)
 
-        this.rom = rom
-    
         // Note: Many sources assume there is a 0x200-byte padding at the beginning of the ROM.
         // TODO: Detect and handle this padding.
+
+        this.rom = rom
 
         // Big high poly Arwing
         //this.sfxObject = new SFXObject(rom, 0x66001, 0x66042)
@@ -517,8 +559,6 @@ class SFXViewer
         //this.sfxObject = new SFXObject(rom, 0x8E1FE, 0x8EA22)
         // Helicopter
         //this.sfxObject = new SFXObject(rom, 0x7B193, 0x7B215)
-
-        this.loadObject(SF1_OBJECT_LIST_ADDRESS + SF1_OBJECT_HEADER_LENGTH * 16)
     }
 
     loadObject(headerAddress: number)
@@ -544,8 +584,6 @@ class SFXViewer
             console.warn(`No object found at header address 0x${headerAddress.toString(16)}`)
             this.sfxObject = null
         }
-
-        this.render()
     }
 
     setModelMatrix(modelMatrix: mat4)
@@ -576,9 +614,11 @@ class SFXViewer
     }
 }
 
+const INITIAL_MODEL_NUMBER = 76
 var viewer: SFXViewer = null
 var horzRotation: number = 0
 var vertRotation: number = 0
+var modelNumber: number = INITIAL_MODEL_NUMBER
 var lastFrameTime: number = performance.now()
 
 const fileInput = <HTMLInputElement>document.getElementById('file-input')
@@ -594,6 +634,7 @@ fileInput.onchange = function (event)
         {
             horzRotation = 0
             vertRotation = 0
+            modelNumber = INITIAL_MODEL_NUMBER
             lastFrameTime = performance.now()
             viewer = new SFXViewer()
             viewer.loadRom(reader.result)
@@ -602,6 +643,21 @@ fileInput.onchange = function (event)
     }
 
     reader.readAsArrayBuffer(file)
+}
+
+const modelNum = <HTMLInputElement>document.getElementById('model-num')
+modelNum.onchange = function (ev)
+{
+    if (viewer)
+    {
+        modelNumber = modelNum.valueAsNumber
+        horzRotation = 0
+        vertRotation = 0
+        lastFrameTime = performance.now()
+        const headerAddress = SF1_OBJECT_LIST_ADDRESS + SF1_OBJECT_HEADER_LENGTH * modelNumber
+        viewer.loadObject(headerAddress)
+        render()
+    }
 }
 
 function render()

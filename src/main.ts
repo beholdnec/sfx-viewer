@@ -1,4 +1,4 @@
-import { mat4 } from 'gl-matrix'
+import { mat3, mat4 } from 'gl-matrix'
 
 console.log('Hello, world!')
 
@@ -30,6 +30,20 @@ function mat4_mul(a: mat4, b: mat4)
     return result
 }
 
+function mat4_invert(a: mat4)
+{
+    const result = mat4.create()
+    mat4.invert(result, a)
+    return result
+}
+
+function mat3_normalFromMat4(a: mat4)
+{
+    const result = mat3.create()
+    mat3.normalFromMat4(result, a)
+    return result
+}
+
 function mat4_rotateX(rad: number)
 {
     const result = mat4.create()
@@ -55,6 +69,13 @@ function mat4_scale(x: number, y: number, z: number)
 {
     const result = mat4.create()
     mat4.fromScaling(result, [x, y, z])
+    return result
+}
+
+function mat4_transpose(a: mat4)
+{
+    const result = mat4.create()
+    mat4.transpose(result, a)
     return result
 }
 
@@ -97,15 +118,19 @@ const SFX_VERTEX_SHADER_SOURCE =
 precision mediump float;
 
 in vec3 aPosition;
+in vec3 aNormal;
 
 uniform mat4 uModelMatrix;
+uniform mat3 uNormalMatrix;
 uniform mat4 uViewProjMatrix;
 
 out vec3 vWorldPosition;
+out vec3 vWorldNormal;
 
 void main()
 {
     vWorldPosition = (uModelMatrix * vec4(aPosition, 1.)).xyz;
+    vWorldNormal = uNormalMatrix * aNormal;
     gl_Position = uViewProjMatrix * vec4(vWorldPosition, 1.);
     gl_PointSize = 4.;
 }
@@ -116,6 +141,10 @@ const SFX_FRAGMENT_SHADER_SOURCE =
 precision mediump float;
 
 in vec3 vWorldPosition;
+in vec3 vWorldNormal;
+
+uniform vec3 uEye; // Currently unused
+uniform vec4 uColor;
 
 out vec4 oColor;
 
@@ -123,17 +152,21 @@ void main()
 {
     vec3 incident = vec3(0., 0., -1.);
     vec3 L = normalize(-incident);
-    vec3 N = normalize(cross(dFdx(vWorldPosition), dFdy(vWorldPosition)));
+    vec3 N = normalize(vWorldNormal);
     float NdotL = clamp(dot(N, L), 0., 1.);
-    oColor = vec4(vec3(NdotL), 1.);
+    oColor = vec4(NdotL * uColor.rgb, uColor.a);
 }
 `
 
 class SFXShader
 {
     aPosition: number
+    aNormal: number
     uModelMatrix: WebGLUniformLocation
+    uNormalMatrix: WebGLUniformLocation
     uViewProjMatrix: WebGLUniformLocation
+    uEye: WebGLUniformLocation
+    uColor: WebGLUniformLocation
 
     program: WebGLProgram
 
@@ -142,8 +175,12 @@ class SFXShader
         this.program = compileProgram(SFX_VERTEX_SHADER_SOURCE, SFX_FRAGMENT_SHADER_SOURCE)
 
         this.aPosition = gl.getAttribLocation(this.program, 'aPosition')
+        this.aNormal = gl.getAttribLocation(this.program, 'aNormal')
         this.uModelMatrix = gl.getUniformLocation(this.program, 'uModelMatrix')
+        this.uNormalMatrix = gl.getUniformLocation(this.program, 'uNormalMatrix')
         this.uViewProjMatrix = gl.getUniformLocation(this.program, 'uViewProjMatrix')
+        this.uEye = gl.getUniformLocation(this.program, 'uEye')
+        this.uColor = gl.getUniformLocation(this.program, 'uColor')
     }
 }
 
@@ -257,11 +294,11 @@ class SFXObject
                 cursor++
                 face.color = dv.getUint8(cursor)
                 cursor++
-                face.nx = dv.getUint8(cursor)
+                face.nx = dv.getInt8(cursor)
                 cursor++
-                face.ny = dv.getUint8(cursor)
+                face.ny = dv.getInt8(cursor)
                 cursor++
-                face.nz = dv.getUint8(cursor)
+                face.nz = dv.getInt8(cursor)
                 cursor++
 
                 face.verts = []
@@ -481,7 +518,11 @@ class SFXObject
         gl.useProgram(this.shader.program)
 
         gl.uniformMatrix4fv(this.shader.uModelMatrix, false, modelMatrix)
+        gl.uniformMatrix3fv(this.shader.uNormalMatrix, false, mat3_normalFromMat4(modelMatrix))
         gl.uniformMatrix4fv(this.shader.uViewProjMatrix, false, viewProjMatrix)
+
+        // TODO: Draw faces with correct colors
+        gl.uniform4fv(this.shader.uColor, [1, 1, 1, 1])
 
         if (this.faces.length > 0)
         {
@@ -503,6 +544,11 @@ class SFXObject
                 gl.enableVertexAttribArray(this.shader.aPosition)
                 gl.vertexAttribPointer(this.shader.aPosition, 3, gl.FLOAT, false, 0, 0)
 
+                // Face normals seem to be inverted; correct them here.
+                // TODO: Program more carefully to avoid strange issues like this. For instance,
+                // this is probably the result of using the wrong matrices.
+                gl.vertexAttrib3fv(this.shader.aNormal, [-face.nx, -face.ny, -face.nz])
+
                 if (face.numVerts >= 3)
                     gl.drawArrays(gl.TRIANGLE_FAN, 0, face.numVerts)
                 else if (face.numVerts == 2)
@@ -514,6 +560,7 @@ class SFXObject
         else
         {
             // No faces defined; draw points
+            // TODO: Disable lighting
             gl.bindBuffer(gl.ARRAY_BUFFER, this.vertexBuffer)
             gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(this.vertices), gl.STREAM_DRAW)
             gl.enableVertexAttribArray(this.shader.aPosition)
@@ -606,6 +653,7 @@ class SFXViewer
         if (this.sfxObject)
         {
             gl.enable(gl.DEPTH_TEST)
+            gl.lineWidth(8.0)
 
             const viewMatrix = mat4.create()
             mat4.translate(viewMatrix, viewMatrix, [0., 0., -150])

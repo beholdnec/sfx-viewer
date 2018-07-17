@@ -10,6 +10,11 @@ export function clamp(a: number, lo: number, hi: number)
         return a
 }
 
+export function mix(x: number, y: number, a: number)
+{
+    return x * (1 - a) + y * a
+}
+
 export function mat4_mul(a: mat4, b: mat4)
 {
     const result = mat4.create()

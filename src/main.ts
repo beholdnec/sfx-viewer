@@ -1,4 +1,4 @@
-import { mat3, mat4 } from 'gl-matrix'
+import { mat3, mat4, vec3 } from 'gl-matrix'
 import { SFXObject } from './sfxobject'
 import * as util from './util'
 
@@ -30,6 +30,9 @@ class SFXViewer
     rom: ArrayBuffer
     sfxObject: SFXObject
     modelMatrix: mat4 = mat4.create()
+    targetYaw: number = 0
+    currentYaw: number = 0
+    yawSpeed: number = Math.PI / 8 / 1000 // yaw speed in radians per millisecond
 
     constructor(gl: WebGLRenderingContext)
     {
@@ -91,6 +94,27 @@ class SFXViewer
         this.modelMatrix = mat4.clone(modelMatrix)
     }
 
+    setTargetYaw(targetYaw: number)
+    {
+        this.targetYaw = targetYaw
+    }
+
+    advance(delta: number)
+    {
+        if (this.currentYaw > this.targetYaw)
+        {
+            this.currentYaw -= this.yawSpeed * delta
+            if (this.currentYaw < this.targetYaw)
+                this.currentYaw = this.targetYaw
+        }
+        else if (this.currentYaw < this.targetYaw)
+        {
+            this.currentYaw += this.yawSpeed * delta
+            if (this.currentYaw > this.targetYaw)
+                this.currentYaw = this.targetYaw
+        }
+    }
+
     render()
     {
         gl.clearColor(0.1, 0.2, 0.3, 1)
@@ -110,12 +134,15 @@ class SFXViewer
             
             const viewProjMatrix = util.mat4_mul(projMatrix, viewMatrix)
 
-            this.sfxObject.render(this.modelMatrix, viewProjMatrix)
+            const modelMatrix = mat4.clone(this.modelMatrix)
+            mat4.rotateX(modelMatrix, modelMatrix, this.currentYaw)
+
+            this.sfxObject.render(modelMatrix, viewProjMatrix)
         }
     }
 }
 
-const INITIAL_MODEL_NUMBER = 76
+const INITIAL_MODEL_NUMBER = 10
 var viewer: SFXViewer = null
 var horzRotation: number = 0
 var vertRotation: number = 0
@@ -197,6 +224,14 @@ canvas.addEventListener('pointermove', function (ev) {
     }
 })
 
+const pressedKeys = {}
+window.addEventListener('keydown', function (ev) {
+    pressedKeys[ev.keyCode] = true
+})
+window.addEventListener('keyup', function (ev) {
+    pressedKeys[ev.keyCode] = false
+})
+
 const FRAMES_PER_SECOND = 10
 const FRAME_MILLIS = 1000 / FRAMES_PER_SECOND
 const MAX_DELTA = 2000
@@ -218,6 +253,20 @@ function advance(delta_: number)
             lastFrameTime += FRAME_MILLIS
             viewer.sfxObject.loadFrame((viewer.sfxObject.curFrame + 1) % viewer.sfxObject.numFrames)
         }
+
+        var vertDir = 0
+        var horzDir = 0
+        if (pressedKeys['W'.charCodeAt(0)])
+            vertDir -= 1
+        if (pressedKeys['S'.charCodeAt(0)])
+            vertDir += 1
+        if (pressedKeys['A'.charCodeAt(0)])
+            horzDir -= 1
+        if (pressedKeys['D'.charCodeAt(0)])
+            horzDir += 1
+
+        viewer.setTargetYaw(Math.PI / 3 * vertDir)
+        viewer.advance(delta)
 
         viewer.render()
     }

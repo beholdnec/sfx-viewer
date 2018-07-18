@@ -111,9 +111,9 @@ class SFXViewer
         this.yawErrorIntegral += e * delta / 1000
         const derivative = (e - this.yawPreviousError) / (delta / 1000)
 
-        const Kp = 5
-        const Ki = 4
-        const Kd = 5
+        const Kp = 12
+        const Ki = 0
+        const Kd = 6
         this.currentYawAcceleration = Kp * e + Ki * this.yawErrorIntegral + Kd * derivative
         this.currentYawAcceleration = util.clamp(this.currentYawAcceleration, -this.MAX_YAW_ACCELERATION, this.MAX_YAW_ACCELERATION)
 
@@ -240,6 +240,65 @@ window.addEventListener('keyup', function (ev) {
     pressedKeys[ev.keyCode] = false
 })
 
+const pidCanvas = <HTMLCanvasElement>document.getElementById('pid-canvas')
+const pid2d = pidCanvas.getContext('2d')
+const pidkp = <HTMLInputElement>document.getElementById('pid-kp')
+const pidki = <HTMLInputElement>document.getElementById('pid-ki')
+const pidkd = <HTMLInputElement>document.getElementById('pid-kd')
+
+function drawPid()
+{
+    pidCanvas.width = pidCanvas.width // Reset the canvas and all parameters
+
+    const Kp = pidkp.valueAsNumber
+    const Ki = pidki.valueAsNumber
+    const Kd = pidkd.valueAsNumber
+
+    const PID_SAMPLES = 60 * 4
+    const PID_DELTA = 1 / 60
+    pid2d.save()
+    pid2d.scale(pidCanvas.width / PID_SAMPLES, pidCanvas.height / -10)
+    pid2d.translate(0, -5)
+
+    const MAX_YAW_ACCELERATION = Math.PI
+    const targetYaw = Math.PI / 3
+    var currentYaw = 0
+    var currentYawVelocity = 0
+    var currentYawAcceleration = 0
+    var yawErrorIntegral = 0
+    var yawPreviousError = 0
+
+    // Draw target
+    pid2d.strokeStyle = 'red'
+    // TODO: draw in red. strokeStyle is clobbered later.
+    pid2d.moveTo(0, targetYaw)
+    pid2d.lineTo(PID_SAMPLES, targetYaw)
+
+    // Draw yaw graph
+    pid2d.strokeStyle = 'black'
+    pid2d.moveTo(0, 0)
+    for (let i = 0; i < PID_SAMPLES; i++)
+    {
+        // Control the ship with a crude PID controller
+        // TODO: step by fixed deltas; be more robust in varying framerates
+        const e = targetYaw - currentYaw
+        yawErrorIntegral += e * PID_DELTA
+        const derivative = (e - yawPreviousError) / PID_DELTA
+
+        currentYawAcceleration = Kp * e + Ki * yawErrorIntegral + Kd * derivative
+        currentYawAcceleration = util.clamp(currentYawAcceleration, -MAX_YAW_ACCELERATION, MAX_YAW_ACCELERATION)
+
+        yawPreviousError = e
+
+        currentYawVelocity += currentYawAcceleration * PID_DELTA
+        currentYaw += currentYawVelocity * PID_DELTA
+
+        pid2d.lineTo(i, currentYaw)
+    }
+    pid2d.restore()
+    pid2d.stroke()
+}
+
 const FRAMES_PER_SECOND = 10
 const FRAME_MILLIS = 1000 / FRAMES_PER_SECOND
 const MAX_DELTA = 2000
@@ -283,6 +342,7 @@ function advance(delta_: number)
 function onFrame(now: number)
 {
     advance(now - lastFrameTime)
+    drawPid()
 
     window.requestAnimationFrame(onFrame)
 }

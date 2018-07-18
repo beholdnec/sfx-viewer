@@ -32,7 +32,9 @@ class SFXViewer
     modelMatrix: mat4 = mat4.create()
     targetYaw: number = 0
     currentYaw: number = 0
-    MAX_YAW_ACCELERATION: number = Math.PI // yaw speed in radians per SECOND
+    MAX_YAW_ACCELERATION: number = Math.PI
+    pendingDelta = 0 // pending delta in seconds. the simulation runs in discrete steps. this variable tracks the pending time after the last step.
+    DELTA_STEP = 1 / 120 // size of delta step in seconds
     currentYawVelocity: number = 0 // yaw velocity in radians per second
     currentYawAcceleration: number = 0 // yaw acceleration in radians per second^2
     yawPreviousError: number = 0
@@ -105,22 +107,28 @@ class SFXViewer
 
     advance(delta: number)
     {
-        // Control the ship with a crude PID controller
-        // TODO: step by fixed deltas; be more robust in varying framerates
-        const e = this.targetYaw - this.currentYaw
-        this.yawErrorIntegral += e * delta / 1000
-        const derivative = (e - this.yawPreviousError) / (delta / 1000)
+        this.pendingDelta += delta / 1000
+        while (this.pendingDelta >= this.DELTA_STEP)
+        {
+            // Control the ship with a crude PID controller
+            // TODO: step by fixed deltas; be more robust in varying framerates
+            const e = this.targetYaw - this.currentYaw
+            this.yawErrorIntegral += e * this.DELTA_STEP
+            const derivative = (e - this.yawPreviousError) / this.DELTA_STEP
 
-        const Kp = 12
-        const Ki = 0
-        const Kd = 6
-        this.currentYawAcceleration = Kp * e + Ki * this.yawErrorIntegral + Kd * derivative
-        this.currentYawAcceleration = util.clamp(this.currentYawAcceleration, -this.MAX_YAW_ACCELERATION, this.MAX_YAW_ACCELERATION)
+            const Kp = 15
+            const Ki = 0
+            const Kd = 7.5
+            this.currentYawAcceleration = Kp * e + Ki * this.yawErrorIntegral + Kd * derivative
+            this.currentYawAcceleration = util.clamp(this.currentYawAcceleration, -this.MAX_YAW_ACCELERATION, this.MAX_YAW_ACCELERATION)
 
-        this.yawPreviousError = e
+            this.yawPreviousError = e
 
-        this.currentYawVelocity += this.currentYawAcceleration * delta / 1000
-        this.currentYaw += this.currentYawVelocity * delta / 1000
+            this.currentYawVelocity += this.currentYawAcceleration * this.DELTA_STEP
+            this.currentYaw += this.currentYawVelocity * this.DELTA_STEP
+
+            this.pendingDelta -= this.DELTA_STEP
+        }
     }
 
     render()

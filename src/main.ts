@@ -32,7 +32,11 @@ class SFXViewer
     modelMatrix: mat4 = mat4.create()
     targetYaw: number = 0
     currentYaw: number = 0
-    yawSpeed: number = Math.PI / 8 / 1000 // yaw speed in radians per millisecond
+    MAX_YAW_ACCELERATION: number = Math.PI // yaw speed in radians per SECOND
+    currentYawVelocity: number = 0 // yaw velocity in radians per second
+    currentYawAcceleration: number = 0 // yaw acceleration in radians per second^2
+    yawPreviousError: number = 0
+    yawErrorIntegral: number = 0 // sum of instantaneus yaw error over time
 
     constructor(gl: WebGLRenderingContext)
     {
@@ -101,18 +105,22 @@ class SFXViewer
 
     advance(delta: number)
     {
-        if (this.currentYaw > this.targetYaw)
-        {
-            this.currentYaw -= this.yawSpeed * delta
-            if (this.currentYaw < this.targetYaw)
-                this.currentYaw = this.targetYaw
-        }
-        else if (this.currentYaw < this.targetYaw)
-        {
-            this.currentYaw += this.yawSpeed * delta
-            if (this.currentYaw > this.targetYaw)
-                this.currentYaw = this.targetYaw
-        }
+        // Control the ship with a crude PID controller
+        // TODO: step by fixed deltas; be more robust in varying framerates
+        const e = this.targetYaw - this.currentYaw
+        this.yawErrorIntegral += e * delta / 1000
+        const derivative = (e - this.yawPreviousError) / (delta / 1000)
+
+        const Kp = 5
+        const Ki = 4
+        const Kd = 5
+        this.currentYawAcceleration = Kp * e + Ki * this.yawErrorIntegral + Kd * derivative
+        this.currentYawAcceleration = util.clamp(this.currentYawAcceleration, -this.MAX_YAW_ACCELERATION, this.MAX_YAW_ACCELERATION)
+
+        this.yawPreviousError = e
+
+        this.currentYawVelocity += this.currentYawAcceleration * delta / 1000
+        this.currentYaw += this.currentYawVelocity * delta / 1000
     }
 
     render()

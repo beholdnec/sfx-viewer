@@ -224,7 +224,7 @@ class Starfield
     MAX_STARS = 1000
     vertexBuffer: WebGLBuffer = gl.createBuffer()
 
-    advance(delta: number)
+    advance(delta: number, heading: vec3)
     {
         this.pendingDelta += delta / 1000
         while (this.pendingDelta >= this.DELTA_STEP)
@@ -232,7 +232,7 @@ class Starfield
             // Move existing stars
             for (let i = 0; i < this.stars.length; i++)
             {
-                this.stars[i].point[2] += this.DELTA_STEP / 1
+                this.stars[i].point = util.vec3_scaleAndAdd(this.stars[i].point, heading, this.DELTA_STEP)
             }
 
             // Retire old stars
@@ -468,7 +468,16 @@ function advance(delta: number)
         delta = MAX_DELTA
     }
 
-    starfield.advance(delta)
+    if (viewer)
+    {
+        const heading = vec3.fromValues(0, 0, 1)
+        vec3.rotateX(heading, heading, [0, 0, 0], viewer.currentYaw)
+        starfield.advance(delta, heading)
+    }
+    else
+    {
+        starfield.advance(delta, vec3.fromValues(0, 0, 1))
+    }
 
     if (viewer && viewer.sfxObject)
     {

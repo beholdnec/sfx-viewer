@@ -1,4 +1,4 @@
-import { mat3, mat4 } from 'gl-matrix'
+import { mat3, mat4, vec3 } from 'gl-matrix'
 
 export function clamp(a: number, lo: number, hi: number)
 {
@@ -68,6 +68,13 @@ export function mat4_transpose(a: mat4)
 {
     const result = mat4.create()
     mat4.transpose(result, a)
+    return result
+}
+
+export function vec3_scaleAndAdd(a: vec3, b: vec3, scale: number)
+{
+    const result = vec3.create()
+    vec3.scaleAndAdd(result, a, b, scale)
     return result
 }
 

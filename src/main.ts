@@ -57,14 +57,16 @@ class SFXViewer
     rom: ArrayBuffer
     sfxObject: SFXObject
     modelMatrix: mat4 = mat4.create()
-    MAX_YAW_ACCELERATION: number = Math.PI
     pendingDelta = 0 // pending delta in seconds. the simulation runs in discrete steps. this variable tracks the pending time after the last step.
     DELTA_STEP = 1 / 120 // size of delta step in seconds
-    yaw: number = 0
-    targetYaw: number = 0
-    yawVelocity: number = 0 // yaw velocity in radians per second
-    yawAcceleration: number = 0 // yaw acceleration in radians per second^2
-    yawPid: PIDController = new PIDController(15, 0, 7.5) // Numbers found through experimentation
+
+    pitch: number = 0
+    targetPitch: number = 0
+    pitchVelocity: number = 0 // pitch velocity in radians per second
+    pitchAcceleration: number = 0 // pitch acceleration in radians per second^2
+    pitchPid: PIDController = new PIDController(15, 0, 7.5) // Numbers found through experimentation
+    MAX_PITCH_ACCELERATION: number = Math.PI
+    
 
     constructor(gl: WebGLRenderingContext)
     {
@@ -126,9 +128,9 @@ class SFXViewer
         this.modelMatrix = mat4.clone(modelMatrix)
     }
 
-    setTargetYaw(targetYaw: number)
+    setTargetPitch(targetPitch: number)
     {
-        this.targetYaw = targetYaw
+        this.targetPitch = targetPitch
     }
 
     advance(delta: number)
@@ -136,11 +138,11 @@ class SFXViewer
         this.pendingDelta += delta / 1000
         while (this.pendingDelta >= this.DELTA_STEP)
         {
-            this.yawAcceleration = this.yawPid.advance(this.DELTA_STEP, this.yaw, this.targetYaw)
-            this.yawAcceleration = util.clamp(this.yawAcceleration, -this.MAX_YAW_ACCELERATION, this.MAX_YAW_ACCELERATION)
+            this.pitchAcceleration = this.pitchPid.advance(this.DELTA_STEP, this.pitch, this.targetPitch)
+            this.pitchAcceleration = util.clamp(this.pitchAcceleration, -this.MAX_PITCH_ACCELERATION, this.MAX_PITCH_ACCELERATION)
 
-            this.yawVelocity += this.yawAcceleration * this.DELTA_STEP
-            this.yaw += this.yawVelocity * this.DELTA_STEP
+            this.pitchVelocity += this.pitchAcceleration * this.DELTA_STEP
+            this.pitch += this.pitchVelocity * this.DELTA_STEP
 
             this.pendingDelta -= this.DELTA_STEP
         }
@@ -162,7 +164,7 @@ class SFXViewer
             const viewProjMatrix = util.mat4_mul(projMatrix, viewMatrix)
 
             const modelMatrix = mat4.clone(this.modelMatrix)
-            mat4.rotateX(modelMatrix, modelMatrix, this.yaw)
+            mat4.rotateX(modelMatrix, modelMatrix, this.pitch)
 
             this.sfxObject.render(modelMatrix, viewProjMatrix)
         }
@@ -486,7 +488,7 @@ function advance(delta: number)
     if (viewer)
     {
         const heading = vec3.fromValues(0, 0, 1)
-        vec3.rotateX(heading, heading, [0, 0, 0], viewer.yaw)
+        vec3.rotateX(heading, heading, [0, 0, 0], viewer.pitch)
         starfield.advance(delta, heading)
     }
     else
@@ -514,7 +516,7 @@ function advance(delta: number)
         if (pressedKeys['D'.charCodeAt(0)])
             horzDir += 1
 
-        viewer.setTargetYaw(Math.PI / 3 * vertDir)
+        viewer.setTargetPitch(Math.PI / 3 * vertDir)
         viewer.advance(delta)
     }
 

@@ -311,10 +311,10 @@ class Starfield
         gl.uniformMatrix4fv(this.shader.uModelMatrix, false, mat4.create())
 
         const viewMatrix = mat4.create()
-        mat4.translate(viewMatrix, viewMatrix, [0., 0., -1])
+        mat4.translate(viewMatrix, viewMatrix, [0., 0., -2.])
 
         const projMatrix = mat4.create()
-        mat4.perspective(projMatrix, 90, canvas.width / canvas.height, 0, 1)
+        mat4.perspective(projMatrix, 45, canvas.width / canvas.height, 0, 1)
         
         const viewProjMatrix = util.mat4_mul(projMatrix, viewMatrix)
         gl.uniformMatrix4fv(this.shader.uViewProjMatrix, false, viewProjMatrix)

@@ -24,21 +24,47 @@ const SF1_OBJECT_LIST_ADDRESS = 0x3B80
 //const SF1_OBJECT_LIST_ADDRESS = 0x5898
 const SF1_OBJECT_HEADER_LENGTH = 0x1C
 
+// Proportional-integral-derivative controller
+class PIDController
+{
+    Kp: number = 0
+    Ki: number = 0
+    Kd: number = 0
+    integral: number = 0
+    previousError: number = 0
+
+    constructor(Kp: number, Ki: number, Kd: number)
+    {
+        this.Kp = Kp
+        this.Ki = Ki
+        this.Kd = Kd
+    }
+
+    advance(delta: number, current: number, target: number): number
+    {
+        const e = target - current
+        this.integral += e * delta
+        const derivative = (e - this.previousError) / delta
+        this.previousError = e // TODO: apply filtering to derivative and integral?
+
+        return this.Kp * e + this.Ki * this.integral + this.Kd * derivative
+    }
+}
+
 class SFXViewer
 {
     gl: WebGLRenderingContext
     rom: ArrayBuffer
     sfxObject: SFXObject
     modelMatrix: mat4 = mat4.create()
-    targetYaw: number = 0
-    currentYaw: number = 0
     MAX_YAW_ACCELERATION: number = Math.PI
     pendingDelta = 0 // pending delta in seconds. the simulation runs in discrete steps. this variable tracks the pending time after the last step.
     DELTA_STEP = 1 / 120 // size of delta step in seconds
-    currentYawVelocity: number = 0 // yaw velocity in radians per second
-    currentYawAcceleration: number = 0 // yaw acceleration in radians per second^2
-    yawPreviousError: number = 0
-    yawErrorIntegral: number = 0 // sum of instantaneus yaw error over time
+    yaw: number = 0
+    targetYaw: number = 0
+    yawVelocity: number = 0 // yaw velocity in radians per second
+    yawAcceleration: number = 0 // yaw acceleration in radians per second^2
+    yawPid: PIDController = new PIDController(15, 0, 7.5) // Numbers found through experimentation
 
     constructor(gl: WebGLRenderingContext)
     {
@@ -110,22 +136,11 @@ class SFXViewer
         this.pendingDelta += delta / 1000
         while (this.pendingDelta >= this.DELTA_STEP)
         {
-            // Control the ship with a crude PID controller
-            // TODO: step by fixed deltas; be more robust in varying framerates
-            const e = this.targetYaw - this.currentYaw
-            this.yawErrorIntegral += e * this.DELTA_STEP
-            const derivative = (e - this.yawPreviousError) / this.DELTA_STEP
+            this.yawAcceleration = this.yawPid.advance(this.DELTA_STEP, this.yaw, this.targetYaw)
+            this.yawAcceleration = util.clamp(this.yawAcceleration, -this.MAX_YAW_ACCELERATION, this.MAX_YAW_ACCELERATION)
 
-            const Kp = 15
-            const Ki = 0
-            const Kd = 7.5
-            this.currentYawAcceleration = Kp * e + Ki * this.yawErrorIntegral + Kd * derivative
-            this.currentYawAcceleration = util.clamp(this.currentYawAcceleration, -this.MAX_YAW_ACCELERATION, this.MAX_YAW_ACCELERATION)
-
-            this.yawPreviousError = e
-
-            this.currentYawVelocity += this.currentYawAcceleration * this.DELTA_STEP
-            this.currentYaw += this.currentYawVelocity * this.DELTA_STEP
+            this.yawVelocity += this.yawAcceleration * this.DELTA_STEP
+            this.yaw += this.yawVelocity * this.DELTA_STEP
 
             this.pendingDelta -= this.DELTA_STEP
         }
@@ -147,7 +162,7 @@ class SFXViewer
             const viewProjMatrix = util.mat4_mul(projMatrix, viewMatrix)
 
             const modelMatrix = mat4.clone(this.modelMatrix)
-            mat4.rotateX(modelMatrix, modelMatrix, this.currentYaw)
+            mat4.rotateX(modelMatrix, modelMatrix, this.yaw)
 
             this.sfxObject.render(modelMatrix, viewProjMatrix)
         }
@@ -471,7 +486,7 @@ function advance(delta: number)
     if (viewer)
     {
         const heading = vec3.fromValues(0, 0, 1)
-        vec3.rotateX(heading, heading, [0, 0, 0], viewer.currentYaw)
+        vec3.rotateX(heading, heading, [0, 0, 0], viewer.yaw)
         starfield.advance(delta, heading)
     }
     else

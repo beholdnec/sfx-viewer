@@ -181,8 +181,8 @@ class SFXViewer
             const viewProjMatrix = util.mat4_mul(projMatrix, viewMatrix)
 
             const modelMatrix = mat4.clone(this.modelMatrix)
-            mat4.rotateX(modelMatrix, modelMatrix, this.pitch)
             mat4.rotateY(modelMatrix, modelMatrix, this.yaw)
+            mat4.rotateX(modelMatrix, modelMatrix, this.pitch)
 
             this.sfxObject.render(modelMatrix, viewProjMatrix)
         }

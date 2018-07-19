@@ -406,6 +406,8 @@ export class SFXObject
     {
         const gl = this.gl
 
+        gl.enable(gl.DEPTH_TEST)
+
         gl.useProgram(this.shader.program)
 
         gl.uniformMatrix4fv(this.shader.uModelMatrix, false, modelMatrix)

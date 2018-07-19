@@ -67,6 +67,12 @@ class SFXViewer
     pitchPid: PIDController = new PIDController(15, 0, 7.5) // Numbers found through experimentation
     MAX_PITCH_ACCELERATION: number = Math.PI
     
+    yaw: number = 0
+    targetYaw: number = 0
+    yawVelocity: number = 0
+    yawAcceleration: number = 0
+    yawPid: PIDController = new PIDController(15, 0, 7.5)
+    MAX_YAW_ACCELERATION: number = Math.PI
 
     constructor(gl: WebGLRenderingContext)
     {
@@ -128,6 +134,11 @@ class SFXViewer
         this.modelMatrix = mat4.clone(modelMatrix)
     }
 
+    setTargetYaw(targetYaw: number)
+    {
+        this.targetYaw = targetYaw
+    }
+
     setTargetPitch(targetPitch: number)
     {
         this.targetPitch = targetPitch
@@ -143,6 +154,12 @@ class SFXViewer
 
             this.pitchVelocity += this.pitchAcceleration * this.DELTA_STEP
             this.pitch += this.pitchVelocity * this.DELTA_STEP
+
+            this.yawAcceleration = this.yawPid.advance(this.DELTA_STEP, this.yaw, this.targetYaw)
+            this.yawAcceleration = util.clamp(this.yawAcceleration, -this.MAX_YAW_ACCELERATION, this.MAX_YAW_ACCELERATION)
+
+            this.yawVelocity += this.yawAcceleration * this.DELTA_STEP
+            this.yaw += this.yawVelocity * this.DELTA_STEP
 
             this.pendingDelta -= this.DELTA_STEP
         }
@@ -165,6 +182,7 @@ class SFXViewer
 
             const modelMatrix = mat4.clone(this.modelMatrix)
             mat4.rotateX(modelMatrix, modelMatrix, this.pitch)
+            mat4.rotateY(modelMatrix, modelMatrix, this.yaw)
 
             this.sfxObject.render(modelMatrix, viewProjMatrix)
         }
@@ -489,6 +507,7 @@ function advance(delta: number)
     {
         const heading = vec3.fromValues(0, 0, 1)
         vec3.rotateX(heading, heading, [0, 0, 0], viewer.pitch)
+        vec3.rotateY(heading, heading, [0, 0, 0], -viewer.yaw)
         starfield.advance(delta, heading)
     }
     else
@@ -516,6 +535,7 @@ function advance(delta: number)
         if (pressedKeys['D'.charCodeAt(0)])
             horzDir += 1
 
+        viewer.setTargetYaw(Math.PI / 6 * horzDir)
         viewer.setTargetPitch(Math.PI / 3 * vertDir)
         viewer.advance(delta)
     }

@@ -356,6 +356,8 @@ fileInput.onchange = function (event)
             lastFrameTime = performance.now()
             viewer = new SFXViewer(gl)
             viewer.loadRom(reader.result)
+            const headerAddress = SF1_OBJECT_LIST_ADDRESS + SF1_OBJECT_HEADER_LENGTH * modelNumber
+            viewer.loadObject(headerAddress)
             render()
         }
     }

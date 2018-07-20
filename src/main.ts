@@ -64,15 +64,15 @@ class SFXViewer
     targetPitch: number = 0
     pitchVelocity: number = 0 // pitch velocity in radians per second
     pitchAcceleration: number = 0 // pitch acceleration in radians per second^2
-    pitchPid: PIDController = new PIDController(15, 0, 7.5) // Numbers found through experimentation
-    MAX_PITCH_ACCELERATION: number = Math.PI
+    pitchPid: PIDController = new PIDController(30, 0, 10) // Numbers found through experimentation
+    MAX_PITCH_ACCELERATION: number = Math.PI * 4
     
     yaw: number = 0
     targetYaw: number = 0
     yawVelocity: number = 0
     yawAcceleration: number = 0
-    yawPid: PIDController = new PIDController(15, 0, 7.5)
-    MAX_YAW_ACCELERATION: number = Math.PI
+    yawPid: PIDController = new PIDController(30, 0, 10)
+    MAX_YAW_ACCELERATION: number = Math.PI * 4
 
     constructor(gl: WebGLRenderingContext)
     {
@@ -452,7 +452,7 @@ function drawPid()
     pid2d.scale(pidCanvas.width / PID_SAMPLES, pidCanvas.height / -10)
     pid2d.translate(0, -5)
 
-    const MAX_YAW_ACCELERATION = Math.PI
+    const MAX_YAW_ACCELERATION = Math.PI * 4
     const targetYaw = Math.PI / 3
     var currentYaw = 0
     var currentYawVelocity = 0

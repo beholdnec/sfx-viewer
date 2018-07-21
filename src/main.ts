@@ -1,5 +1,5 @@
 import { mat3, mat4, vec2, vec3, vec4 } from 'gl-matrix'
-import { SFXObject } from './sfxobject'
+import { SFXObject, SFXShader } from './sfxobject'
 import { Starfield } from './starfield'
 import * as util from './util'
 
@@ -15,6 +15,78 @@ canvas.height = desiredHeight * devicePixelRatio
 
 // Get GL context AFTER resizing canvas, otherwise the viewport is wrong.
 const gl = <WebGL2RenderingContext>canvas.getContext('webgl')
+
+class Torus
+{
+    vertexBuffer: WebGLBuffer = gl.createBuffer()
+    indexBuffer: WebGLBuffer = gl.createBuffer()
+    numIndices: number = 0
+    shader: SFXShader = new SFXShader(gl)
+
+    constructor(radius: number, steps: number, tubeRadius: number, tubeSteps: number)
+    {
+        // Build a torus model. This could be more efficient, but it works and I'm happy with it.
+        const vertices = []
+        const indices = []
+        var i = 0
+        this.numIndices = 0
+        for (let s = 0; s < steps; s++)
+        {
+            const angle = s * 2 * Math.PI / (steps - 1)
+            const c = vec3.fromValues(radius * Math.cos(angle), radius * Math.sin(angle), 0)
+            for (let t = 0; t < tubeSteps; t++)
+            {
+                const tubeAngle = t * 2 * Math.PI / (tubeSteps - 1)
+                const n = vec3.fromValues(Math.cos(tubeAngle), 0, Math.sin(tubeAngle))
+                vec3.rotateZ(n, n, [0, 0, 0], angle)
+                const p = util.vec3_scaleAndAdd(c, n, tubeRadius)
+                vertices.push(p[0], p[1], p[2]) // position
+                vertices.push(n[0], n[1], n[2]) // normal
+                if (s > 0 && t > 0) {
+                    indices.push(
+                        i,
+                        i - 1,
+                        i - tubeSteps,
+                        i - 1,
+                        i - tubeSteps,
+                        i - tubeSteps - 1
+                    )
+                    this.numIndices += 6
+                }
+                i++
+            }
+        }
+
+        gl.bindBuffer(gl.ARRAY_BUFFER, this.vertexBuffer)
+        gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(vertices), gl.STATIC_DRAW)
+        gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, this.indexBuffer)
+        gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint16Array(indices), gl.STATIC_DRAW)
+    }
+
+    render(modelMatrix: mat4, viewProjMatrix: mat4)
+    {
+        gl.enable(gl.DEPTH_TEST)
+
+        gl.useProgram(this.shader.program)
+
+        gl.uniformMatrix4fv(this.shader.uModelMatrix, false, modelMatrix)
+        gl.uniformMatrix3fv(this.shader.uNormalMatrix, false, util.mat3_normalFromMat4(modelMatrix))
+        gl.uniformMatrix4fv(this.shader.uViewProjMatrix, false, viewProjMatrix)
+
+        gl.uniform3fv(this.shader.uEye, [0, 0, 0]) // TODO
+        gl.uniform4fv(this.shader.uColor, [0, 1, 0, 1])
+
+        gl.bindBuffer(gl.ARRAY_BUFFER, this.vertexBuffer)
+        gl.enableVertexAttribArray(this.shader.aPosition)
+        gl.vertexAttribPointer(this.shader.aPosition, 3, gl.FLOAT, false, 4 * 6, 0)
+        gl.enableVertexAttribArray(this.shader.aNormal)
+        gl.vertexAttribPointer(this.shader.aNormal, 3, gl.FLOAT, false, 4 * 6, 4 * 3)
+
+        gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, this.indexBuffer)
+        gl.drawElements(gl.TRIANGLES, this.numIndices, gl.UNSIGNED_SHORT, 0)
+        //gl.drawArrays(gl.POINTS, 0, this.numVertices)
+    }
+}
 
 // These are addresses of object header arrays. I don't know whether these are separate arrays or
 // or one big array that is being interpreted wrongly.
@@ -239,6 +311,7 @@ modelNum.onchange = function (ev)
 }
 
 const starfield = new Starfield(gl)
+const torus = new Torus(3, 100, 1, 100)
 
 function render()
 {
@@ -246,10 +319,24 @@ function render()
     gl.clearDepth(1.0)
     gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT)
 
+    // Render starfield
     starfield.render()
+    
+    // Render torus
+    gl.clear(gl.DEPTH_BUFFER_BIT)
+    var modelMatrix = mat4.create()
+    mat4.rotateY(modelMatrix, modelMatrix, (performance.now() % 2000) / 2000 * 2 * Math.PI)
+    const viewMatrix = mat4.create()
+    mat4.translate(viewMatrix, viewMatrix, [0., 0., -10])
+    const projMatrix = mat4.create()
+    mat4.perspective(projMatrix, 45, canvas.width / canvas.height, 0.01, 10000.0)
+    const viewProjMatrix = util.mat4_mul(projMatrix, viewMatrix)
+    torus.render(modelMatrix, viewProjMatrix)
 
+    // Render model if loaded
     if (viewer)
     {
+        gl.clear(gl.DEPTH_BUFFER_BIT)
         var modelMatrix = util.mat4_mul(
             util.mat4_rotateX(vertRotation),
             util.mat4_rotateY(horzRotation)

@@ -44,7 +44,7 @@ void main()
 }
 `
 
-class SFXShader
+export class SFXShader
 {
     aPosition: number
     aNormal: number
@@ -414,6 +414,7 @@ export class SFXObject
         gl.uniformMatrix3fv(this.shader.uNormalMatrix, false, util.mat3_normalFromMat4(modelMatrix))
         gl.uniformMatrix4fv(this.shader.uViewProjMatrix, false, viewProjMatrix)
 
+        gl.uniform3fv(this.shader.uEye, [0, 0, 0]) // TODO
         // TODO: Draw faces with correct colors
         gl.uniform4fv(this.shader.uColor, [1, 1, 1, 1])
 
@@ -440,6 +441,7 @@ export class SFXObject
                 // Face normals seem to be inverted; correct them here.
                 // TODO: Program more carefully to avoid strange issues like this. For instance,
                 // this is probably the result of using the wrong matrices.
+                gl.disableVertexAttribArray(this.shader.aNormal)
                 gl.vertexAttrib3fv(this.shader.aNormal, [-face.nx, -face.ny, -face.nz])
 
                 if (face.numVerts >= 3)

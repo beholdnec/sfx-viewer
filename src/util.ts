@@ -64,6 +64,13 @@ export function mat4_scale(x: number, y: number, z: number)
     return result
 }
 
+export function mat4_translate(v: vec3)
+{
+    const result = mat4.create()
+    mat4.translate(result, result, v)
+    return result
+}
+
 export function mat4_transpose(a: mat4)
 {
     const result = mat4.create()

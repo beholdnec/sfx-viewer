@@ -22,9 +22,12 @@ class Torus
     indexBuffer: WebGLBuffer = gl.createBuffer()
     numIndices: number = 0
     shader: SFXShader = new SFXShader(gl)
+    position: vec3
 
-    constructor(radius: number, steps: number, tubeRadius: number, tubeSteps: number)
+    constructor(position: vec3, radius: number, steps: number, tubeRadius: number, tubeSteps: number)
     {
+        this.position = position
+        
         // Build a torus model. This could be more efficient, but it works and I'm happy with it.
         const vertices = []
         const indices = []
@@ -63,12 +66,18 @@ class Torus
         gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint16Array(indices), gl.STATIC_DRAW)
     }
 
-    render(modelMatrix: mat4, viewProjMatrix: mat4)
+    advance(delta: number, heading: vec3)
+    {
+        this.position = util.vec3_scaleAndAdd(this.position, heading, delta / 1000)
+    }
+
+    render(viewProjMatrix: mat4)
     {
         gl.enable(gl.DEPTH_TEST)
 
         gl.useProgram(this.shader.program)
 
+        const modelMatrix = util.mat4_translate(this.position)
         gl.uniformMatrix4fv(this.shader.uModelMatrix, false, modelMatrix)
         gl.uniformMatrix3fv(this.shader.uNormalMatrix, false, util.mat3_normalFromMat4(modelMatrix))
         gl.uniformMatrix4fv(this.shader.uViewProjMatrix, false, viewProjMatrix)
@@ -311,7 +320,7 @@ modelNum.onchange = function (ev)
 }
 
 const starfield = new Starfield(gl)
-const torus = new Torus(3, 100, 1, 100)
+const torus = new Torus(vec3.fromValues(0, 0, 0), 3, 9, 0.5, 9)
 
 function render()
 {
@@ -324,14 +333,12 @@ function render()
     
     // Render torus
     gl.clear(gl.DEPTH_BUFFER_BIT)
-    var modelMatrix = mat4.create()
-    mat4.rotateY(modelMatrix, modelMatrix, (performance.now() % 2000) / 2000 * 2 * Math.PI)
     const viewMatrix = mat4.create()
     mat4.translate(viewMatrix, viewMatrix, [0., 0., -10])
     const projMatrix = mat4.create()
     mat4.perspective(projMatrix, 45, canvas.width / canvas.height, 0.01, 10000.0)
     const viewProjMatrix = util.mat4_mul(projMatrix, viewMatrix)
-    torus.render(modelMatrix, viewProjMatrix)
+    torus.render(viewProjMatrix)
 
     // Render model if loaded
     if (viewer)
@@ -456,10 +463,12 @@ function advance(delta: number)
         vec3.rotateX(heading, heading, [0, 0, 0], viewer.pitch)
         vec3.rotateY(heading, heading, [0, 0, 0], -viewer.yaw)
         starfield.advance(delta, heading)
+        torus.advance(delta, heading)
     }
     else
     {
         starfield.advance(delta, vec3.fromValues(0, 0, 1))
+        torus.advance(delta, vec3.fromValues(0, 0, 1))
     }
 
     if (viewer && viewer.sfxObject)

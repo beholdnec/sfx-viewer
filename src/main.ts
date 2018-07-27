@@ -68,7 +68,7 @@ class Torus
 
     advance(delta: number, heading: vec3)
     {
-        this.position = util.vec3_scaleAndAdd(this.position, heading, delta / 1000)
+        this.position = util.vec3_scaleAndAdd(this.position, heading, delta)
     }
 
     render(viewProjMatrix: mat4)
@@ -247,20 +247,12 @@ class SFXViewer
         }
     }
 
-    render()
+    render(viewProjMatrix: mat4)
     {
         if (this.sfxObject)
         {
             gl.enable(gl.DEPTH_TEST)
             gl.lineWidth(8.0)
-
-            const viewMatrix = mat4.create()
-            mat4.translate(viewMatrix, viewMatrix, [0., 0., -150])
-
-            const projMatrix = mat4.create()
-            mat4.perspective(projMatrix, 45, canvas.width / canvas.height, 0.01, 10000.0)
-            
-            const viewProjMatrix = util.mat4_mul(projMatrix, viewMatrix)
 
             const modelMatrix = mat4.clone(this.modelMatrix)
             mat4.rotateY(modelMatrix, modelMatrix, this.yaw)
@@ -278,6 +270,9 @@ var vertRotation: number = 0
 var modelNumber: number = INITIAL_MODEL_NUMBER
 var lastFrameTime: number = performance.now()
 
+const starfield = new Starfield(gl)
+const torus = new Torus(vec3.fromValues(0, 0, 0), 3, 9, 0.5, 9)
+
 const fileInput = <HTMLInputElement>document.getElementById('file-input')
 fileInput.onchange = function (event)
 {
@@ -289,6 +284,7 @@ fileInput.onchange = function (event)
     {
         if (evt.target.readyState == FileReader.DONE)
         {
+            torus.position = vec3.fromValues(0, 0, 0)
             horzRotation = 0
             vertRotation = 0
             modelNumber = INITIAL_MODEL_NUMBER
@@ -304,11 +300,13 @@ fileInput.onchange = function (event)
     reader.readAsArrayBuffer(file)
 }
 
+
 const modelNum = <HTMLInputElement>document.getElementById('model-num')
 modelNum.onchange = function (ev)
 {
     if (viewer)
     {
+        torus.position = vec3.fromValues(0, 0, 0)
         modelNumber = modelNum.valueAsNumber
         horzRotation = 0
         vertRotation = 0
@@ -319,25 +317,24 @@ modelNum.onchange = function (ev)
     }
 }
 
-const starfield = new Starfield(gl)
-const torus = new Torus(vec3.fromValues(0, 0, 0), 3, 9, 0.5, 9)
 
 function render()
 {
     gl.clearColor(0, 0, 0, 1)
     gl.clearDepth(1.0)
     gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT)
+    
+    const viewMatrix = mat4.create()
+    mat4.translate(viewMatrix, viewMatrix, [0., 0., -150])
+    const projMatrix = mat4.create()
+    mat4.perspective(projMatrix, 45, canvas.width / canvas.height, 0.01, 10000.0)
+    const viewProjMatrix = util.mat4_mul(projMatrix, viewMatrix)
 
     // Render starfield
     starfield.render()
     
     // Render torus
     gl.clear(gl.DEPTH_BUFFER_BIT)
-    const viewMatrix = mat4.create()
-    mat4.translate(viewMatrix, viewMatrix, [0., 0., -10])
-    const projMatrix = mat4.create()
-    mat4.perspective(projMatrix, 45, canvas.width / canvas.height, 0.01, 10000.0)
-    const viewProjMatrix = util.mat4_mul(projMatrix, viewMatrix)
     torus.render(viewProjMatrix)
 
     // Render model if loaded
@@ -354,7 +351,7 @@ function render()
             util.mat4_scale(1, -1, -1)
         )
         viewer.setModelMatrix(modelMatrix)
-        viewer.render()
+        viewer.render(viewProjMatrix)
     }
 }
 
@@ -463,7 +460,7 @@ function advance(delta: number)
         vec3.rotateX(heading, heading, [0, 0, 0], viewer.pitch)
         vec3.rotateY(heading, heading, [0, 0, 0], -viewer.yaw)
         starfield.advance(delta, heading)
-        torus.advance(delta, heading)
+        torus.advance(delta / 30, heading)
     }
     else
     {

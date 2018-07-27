@@ -465,7 +465,16 @@ function advance(delta: number)
     else
     {
         starfield.advance(delta, vec3.fromValues(0, 0, 1))
-        torus.advance(delta, vec3.fromValues(0, 0, 1))
+        torus.advance(delta / 30, vec3.fromValues(0, 0, 1))
+    }
+
+    if (torus.position[2] > 150)
+    {
+        torus.position = vec3.fromValues(
+            util.mix(-50, 50, Math.random()),
+            util.mix(-50, 50, Math.random()),
+            0
+        )
     }
 
     if (viewer && viewer.sfxObject)

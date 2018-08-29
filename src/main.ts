@@ -113,8 +113,9 @@ class PIDController
     Ki: number = 0
     Kd: number = 0
     integral: number = 0
-    previousError: number = 0
+    previousError: number = 0 // TODO: Initialize with a reasonable value
 
+    // Note: To prevent overshoot, make sure that Kd^2 - 4*Kp > 0.
     constructor(Kp: number, Ki: number, Kd: number)
     {
         this.Kp = Kp
@@ -146,14 +147,14 @@ class SFXViewer
     targetPitch: number = 0
     pitchVelocity: number = 0 // pitch velocity in radians per second
     pitchAcceleration: number = 0 // pitch acceleration in radians per second^2
-    pitchPid: PIDController = new PIDController(30, 0, 10) // Numbers found through experimentation
+    pitchPid: PIDController = new PIDController(12, 0, 7) // Numbers found through experimentation
     MAX_PITCH_ACCELERATION: number = Math.PI * 4
     
     yaw: number = 0
     targetYaw: number = 0
     yawVelocity: number = 0
     yawAcceleration: number = 0
-    yawPid: PIDController = new PIDController(30, 0, 10)
+    yawPid: PIDController = new PIDController(12, 0, 7)
     MAX_YAW_ACCELERATION: number = Math.PI * 4
 
     constructor(gl: WebGLRenderingContext)
@@ -395,19 +396,20 @@ function drawPid()
     const Ki = pidki.valueAsNumber
     const Kd = pidkd.valueAsNumber
 
-    const PID_SAMPLES = 60 * 4
+    const PID_SAMPLES = 60 * 8
     const PID_DELTA = 1 / 60
     pid2d.save()
     pid2d.scale(pidCanvas.width / PID_SAMPLES, pidCanvas.height / -10)
     pid2d.translate(0, -5)
 
     const MAX_YAW_ACCELERATION = Math.PI * 4
-    const targetYaw = Math.PI / 3
-    var currentYaw = 0
+    const targetYaw = 3
+    var currentYaw = -3
     var currentYawVelocity = 0
     var currentYawAcceleration = 0
-    var yawErrorIntegral = 0
-    var yawPreviousError = 0
+
+    const pid = new PIDController(Kp, Ki, Kd)
+    pid.previousError = targetYaw - currentYaw
 
     // Draw target
     pid2d.strokeStyle = 'red'
@@ -420,16 +422,8 @@ function drawPid()
     pid2d.moveTo(0, 0)
     for (let i = 0; i < PID_SAMPLES; i++)
     {
-        // Control the ship with a crude PID controller
-        // TODO: step by fixed deltas; be more robust in varying framerates
-        const e = targetYaw - currentYaw
-        yawErrorIntegral += e * PID_DELTA
-        const derivative = (e - yawPreviousError) / PID_DELTA
-
-        currentYawAcceleration = Kp * e + Ki * yawErrorIntegral + Kd * derivative
-        currentYawAcceleration = util.clamp(currentYawAcceleration, -MAX_YAW_ACCELERATION, MAX_YAW_ACCELERATION)
-
-        yawPreviousError = e
+        currentYawAcceleration = pid.advance(PID_DELTA, currentYaw, targetYaw)
+        //currentYawAcceleration = util.clamp(currentYawAcceleration, -MAX_YAW_ACCELERATION, MAX_YAW_ACCELERATION)
 
         currentYawVelocity += currentYawAcceleration * PID_DELTA
         currentYaw += currentYawVelocity * PID_DELTA

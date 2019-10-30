@@ -689,7 +689,7 @@ fileInput.onchange = function (event)
             modelNumber = INITIAL_MODEL_NUMBER
             lastFrameTime = performance.now()
             viewer = new SFXViewer()
-            viewer.loadRom(reader.result)
+            viewer.loadRom(<ArrayBuffer>reader.result)
             render()
         }
     }
